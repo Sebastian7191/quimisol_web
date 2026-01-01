@@ -1,25 +1,21 @@
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:quimisol_web/features/sidebar/pages/sidebar.dart';
 
-import 'app_widget.dart';
-
 class AppModule extends Module {
   @override
-  void binds(Injector i) {
-    // Aquí luego vas agregando tus services, repositories, stores, controllers, etc.
-    // Ej:
-    // i.addSingleton<AuthService>(AuthServiceImpl.new);
-  }
+  void binds(Injector i) {}
 
   @override
   void routes(RouteManager r) {
-    // Ruta raíz: normalmente muestra AppWidget (que a su vez contiene el router)
+    // ✅ Todas estas rutas cargan el MISMO Shell (sidebar)
     r.child('/', child: (_) => const SidebarShellPage());
+    r.child('/dashboard', child: (_) => const SidebarShellPage());
+    r.child('/usuarios', child: (_) => const SidebarShellPage());
+    r.child('/almacenes', child: (_) => const SidebarShellPage());
+    r.child('/productos', child: (_) => const SidebarShellPage());
+    r.child('/unidades', child: (_) => const SidebarShellPage());
 
-    // Ejemplo opcional (por si quieres tener una pantalla “home” separada luego)
-    // r.child(
-    //   '/home',
-    //   child: (_) => const HomePage(),
-    // );
+    // ✅ futuras rutas hijas (también deben ir al shell)
+    r.child('/almacenes/:id', child: (_) => const SidebarShellPage());
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_modular/flutter_modular.dart';
 
 import 'package:quimisol_web/core/theme/palette.dart';
 
@@ -26,8 +27,36 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
   Timer? _closeTimer;
 
   // 🎨 Colores
-  Color get _main => Palette.button;   // rosa
+  Color get _main => Palette.button; // rosa
   Color get _accent => Palette.primary; // morado
+
+  final List<_SideItem> _items = const [
+    _SideItem(
+      icon: Icons.dashboard_rounded,
+      label: 'Dashboard',
+      route: '/dashboard',
+    ),
+    _SideItem(
+      icon: Icons.people_alt_rounded,
+      label: 'Usuarios',
+      route: '/usuarios',
+    ),
+    _SideItem(
+      icon: Icons.warehouse_rounded,
+      label: 'Almacenes',
+      route: '/almacenes',
+    ),
+    _SideItem(
+      icon: Icons.inventory_2_rounded,
+      label: 'Productos',
+      route: '/productos',
+    ),
+    _SideItem(
+      icon: Icons.straighten_rounded,
+      label: 'Unidades',
+      route: '/unidades',
+    ),
+  ];
 
   void _cancelCloseTimer() {
     _closeTimer?.cancel();
@@ -43,9 +72,52 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
     _cancelCloseTimer();
     _closeTimer = Timer(const Duration(milliseconds: 160), () {
       final keepOpen = _hoveringSidebar || _hoveringTrigger;
-      if (!keepOpen && mounted) {
-        setState(() => _sidebarOpen = false);
+      if (!keepOpen && mounted) setState(() => _sidebarOpen = false);
+    });
+  }
+
+  /// ✅ Mapea URL -> índice del sidebar
+  int _indexFromPath(String path) {
+    if (path.startsWith('/usuarios')) return 1;
+    if (path.startsWith('/almacenes')) return 2; // incluye /almacenes/:id
+    if (path.startsWith('/productos')) return 3;
+    if (path.startsWith('/unidades')) return 4;
+    return 0; // dashboard por defecto
+  }
+
+  void _syncIndexWithPath(String path) {
+    final idx = _indexFromPath(path);
+    if (idx != _currentIndex && mounted) {
+      setState(() => _currentIndex = idx);
+    }
+  }
+
+  void _goTo(int index) {
+    setState(() => _currentIndex = index);
+    // ❌ NO navegar aquí para evitar remount / sensación de otra página
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    // ✅ primera sincronización post-frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final p = Modular.to.path;
+
+      // Si entras a "/" -> mandamos a dashboard
+      if (p == '/' || p.isEmpty) {
+        Modular.to.navigate('/dashboard');
+        _syncIndexWithPath('/dashboard');
+      } else {
+        _syncIndexWithPath(p);
       }
+    });
+
+    // ✅ si cambias URL manualmente o recargas
+    Modular.to.addListener(() {
+      if (!mounted) return;
+      _syncIndexWithPath(Modular.to.path);
     });
   }
 
@@ -65,19 +137,11 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
       const UnidadesPage(),
     ];
 
-    final items = const <_SideItem>[
-      _SideItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
-      _SideItem(icon: Icons.people_alt_rounded, label: 'Usuarios'),
-      _SideItem(icon: Icons.warehouse_rounded, label: 'Almacenes'),
-      _SideItem(icon: Icons.inventory_2_rounded, label: 'Productos'),
-      _SideItem(icon: Icons.straighten_rounded, label: 'Unidades'),
-    ];
-
     return Scaffold(
       backgroundColor: Palette.fieldBg,
       body: Row(
         children: [
-          /// 🔹 ZONA TRIGGER (borde izquierdo)
+          /// 🔹 TRIGGER (borde izquierdo)
           MouseRegion(
             onEnter: (_) {
               _hoveringTrigger = true;
@@ -87,10 +151,10 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
               _hoveringTrigger = false;
               _scheduleClose();
             },
-            child: const SizedBox(width: 6),
+            child: const SizedBox(width: 6, height: double.infinity),
           ),
 
-          /// 🔹 SIDEBAR PEGADO
+          /// 🔹 SIDEBAR (pegado a la izquierda)
           MouseRegion(
             onEnter: (_) {
               _hoveringSidebar = true;
@@ -103,14 +167,14 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
             child: _Sidebar(
               isOpen: _sidebarOpen,
               currentIndex: _currentIndex,
-              items: items,
+              items: _items,
               mainColor: _main,
               accentColor: _accent,
-              onChanged: (i) => setState(() => _currentIndex = i),
+              onChanged: _goTo,
             ),
           ),
 
-          /// 🔹 BODY
+          /// 🔹 BODY (siempre visible)
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(14),
@@ -132,7 +196,13 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
 class _SideItem {
   final IconData icon;
   final String label;
-  const _SideItem({required this.icon, required this.label});
+  final String route;
+
+  const _SideItem({
+    required this.icon,
+    required this.label,
+    required this.route,
+  });
 }
 
 class _Sidebar extends StatelessWidget {
@@ -161,13 +231,15 @@ class _Sidebar extends StatelessWidget {
       width: isOpen ? _openWidth : _closedWidth,
       decoration: BoxDecoration(
         color: Palette.white,
-        border: Border(
-          right: BorderSide(color: mainColor.withOpacity(0.55)),
-        ),
+        border: Border(right: BorderSide(color: mainColor.withOpacity(0.55))),
       ),
       child: Column(
         children: [
-          _SidebarHeader(open: isOpen, mainColor: mainColor, accentColor: accentColor),
+          _SidebarHeader(
+            open: isOpen,
+            mainColor: mainColor,
+            accentColor: accentColor,
+          ),
           const SizedBox(height: 6),
           Expanded(
             child: ListView.builder(
@@ -175,7 +247,7 @@ class _Sidebar extends StatelessWidget {
               itemCount: items.length,
               itemBuilder: (_, i) {
                 final selected = i == currentIndex;
-                return _SidebarItem(
+                return _SidebarItemTile(
                   open: isOpen,
                   selected: selected,
                   icon: items[i].icon,
@@ -229,21 +301,38 @@ class _SidebarHeader extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Quimisol Admin',
-                      style: TextStyle(color: Palette.white, fontWeight: FontWeight.w800)),
-                  Text('Panel de control',
-                      style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text(
+                    'Quimisol Admin',
+                    style: TextStyle(
+                      color: Palette.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Panel de control',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             ),
           ],
+          Icon(
+            open ? Icons.chevron_left_rounded : Icons.chevron_right_rounded,
+            color: Palette.white.withOpacity(0.9),
+          ),
         ],
       ),
     );
   }
 }
 
-class _SidebarItem extends StatelessWidget {
+class _SidebarItemTile extends StatelessWidget {
   final bool open;
   final bool selected;
   final IconData icon;
@@ -251,7 +340,7 @@ class _SidebarItem extends StatelessWidget {
   final Color mainColor;
   final VoidCallback onTap;
 
-  const _SidebarItem({
+  const _SidebarItemTile({
     required this.open,
     required this.selected,
     required this.icon,
@@ -264,14 +353,27 @@ class _SidebarItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = selected ? mainColor.withOpacity(0.22) : Colors.transparent;
     final iconColor = selected ? Palette.primary : Palette.ink;
+    final textColor = selected ? Palette.primary : Palette.ink;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(color: bg),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: selected ? mainColor.withOpacity(0.5) : Colors.transparent,
+        ),
+      ),
       child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: open ? 14 : 10, vertical: 12),
+          padding: EdgeInsets.symmetric(
+            horizontal: open ? 14 : 10,
+            vertical: 12,
+          ),
           child: Row(
             children: [
               Icon(icon, color: iconColor, size: 22),
@@ -280,9 +382,12 @@ class _SidebarItem extends StatelessWidget {
                 Expanded(
                   child: Text(
                     label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: iconColor,
+                      color: textColor,
                       fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      fontSize: 13.5,
                     ),
                   ),
                 ),
@@ -305,10 +410,21 @@ class _SidebarFooter extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-          Icon(Icons.info_outline_rounded, size: 18, color: Palette.ink),
+          Icon(
+            Icons.info_outline_rounded,
+            size: 18,
+            color: Palette.ink.withOpacity(0.8),
+          ),
           if (open) ...[
             const SizedBox(width: 8),
-            const Text('Admin • Web', style: TextStyle(fontSize: 12)),
+            Text(
+              'Admin • Web',
+              style: TextStyle(
+                fontSize: 12,
+                color: Palette.ink.withOpacity(0.7),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ],
       ),

@@ -28,6 +28,26 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
   ];
 
   /// ===========================
+  /// ✅ IMPRIMIR LINK ÍNDICE EN CONSOLA
+  /// ===========================
+  void _printFirestoreIndexLink(Object error) {
+    final raw = error.toString();
+
+    final match = RegExp(
+      r'(https:\/\/console\.firebase\.google\.com\/[^\s]+)',
+    ).firstMatch(raw);
+
+    if (match != null) {
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint('✅ CREA EL ÍNDICE AQUÍ:');
+      debugPrint(match.group(1));
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } else {
+      debugPrint('🔥 Firestore error (sin link encontrado): $raw');
+    }
+  }
+
+  /// ===========================
   /// 🔥 GUARDAR EN FIRESTORE
   /// ===========================
   Future<void> _guardarAlmacenFirestore({
@@ -43,6 +63,9 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
       'descripcion': descripcion.trim(),
       'activo': true,
       'createdAt': FieldValue.serverTimestamp(),
+      // opcionales:
+      'productos': 0,
+      'stock': 0,
     });
   }
 
@@ -68,6 +91,7 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
         );
       }
     } catch (e) {
+      debugPrint('🔥 Error guardando almacén: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -83,16 +107,10 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
   /// 🔥 STREAM FIRESTORE
   /// ===========================
   Stream<QuerySnapshot<Map<String, dynamic>>> _almacenesStream() {
-    // Base query: activos
-    var q = FirebaseFirestore.instance
+    return FirebaseFirestore.instance
         .collection('almacenes')
-        .where('activo', isEqualTo: true);
-
-    // Si quieres ordenar por fecha:
-    // (ojo: si createdAt es null en docs viejos, puede dar conflicto)
-    q = q.orderBy('createdAt', descending: true);
-
-    return q.snapshots();
+        .orderBy('createdAt', descending: true)
+        .snapshots();
   }
 
   @override
@@ -114,7 +132,6 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
                 ),
               ),
               const Spacer(),
-
               ElevatedButton.icon(
                 onPressed: _openAddAlmacenDialog,
                 icon: const Icon(Icons.add_rounded),
@@ -123,7 +140,10 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
                   backgroundColor: Palette.button,
                   foregroundColor: Palette.white,
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -163,7 +183,12 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
               stream: _almacenesStream(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return _ErrorBox(message: 'Error al cargar almacenes: ${snapshot.error}');
+                  // ✅ imprime el link del índice en la terminal
+                  _printFirestoreIndexLink(snapshot.error!);
+
+                  return _ErrorBox(
+                    message: 'Error al cargar almacenes: ${snapshot.error}',
+                  );
                 }
 
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -172,29 +197,29 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
 
                 final docs = snapshot.data?.docs ?? [];
 
-                // Mapear docs a lista usable
                 final all = docs.map((d) {
                   final data = d.data();
                   return {
-                    'id': d.id, // ✅ docId
+                    'id': d.id,
                     'nombre': (data['nombre'] ?? '').toString(),
                     'departamento': (data['departamento'] ?? '').toString(),
                     'descripcion': (data['descripcion'] ?? '').toString(),
-                    // Estos 2 aún no existen en tu doc -> por ahora 0
                     'productos': (data['productos'] ?? 0),
                     'stock': (data['stock'] ?? 0),
                   };
                 }).toList();
 
-                // Filtrar por chip seleccionado (frontend)
                 final filtered = selectedDepto == 'Todos'
                     ? all
-                    : all.where((a) => a['departamento'] == selectedDepto).toList();
+                    : all
+                          .where((a) => a['departamento'] == selectedDepto)
+                          .toList();
 
                 if (filtered.isEmpty) {
                   return const _EmptyBox(
                     title: 'No hay almacenes',
-                    subtitle: 'Agrega un almacén o cambia el filtro de departamento.',
+                    subtitle:
+                        'Agrega un almacén o cambia el filtro de departamento.',
                   );
                 }
 
@@ -212,7 +237,7 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
                     return InkWell(
                       borderRadius: BorderRadius.circular(18),
                       onTap: () {
-                        // ✅ Ahora navega con docId (string)
+                        // Si tienes página de detalle luego:
                         Modular.to.pushNamed('/almacenes/${a['id']}');
                       },
                       child: Container(
@@ -220,7 +245,9 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
                         decoration: BoxDecoration(
                           color: Palette.white,
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: Palette.button.withOpacity(0.45)),
+                          border: Border.all(
+                            color: Palette.button.withOpacity(0.45),
+                          ),
                           boxShadow: [
                             BoxShadow(
                               blurRadius: 12,
@@ -252,9 +279,15 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
                             const Spacer(),
                             Row(
                               children: [
-                                _Stat(label: 'Productos', value: (a['productos'] ?? 0).toString()),
+                                _Stat(
+                                  label: 'Productos',
+                                  value: (a['productos'] ?? 0).toString(),
+                                ),
                                 const SizedBox(width: 16),
-                                _Stat(label: 'Stock', value: (a['stock'] ?? 0).toString()),
+                                _Stat(
+                                  label: 'Stock',
+                                  value: (a['stock'] ?? 0).toString(),
+                                ),
                               ],
                             ),
                           ],
@@ -285,10 +318,7 @@ class _Stat extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
-            color: Palette.ink.withOpacity(0.6),
-            fontSize: 12,
-          ),
+          style: TextStyle(color: Palette.ink.withOpacity(0.6), fontSize: 12),
         ),
         const SizedBox(height: 2),
         Text(
@@ -312,7 +342,6 @@ class _LoadingGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // skeleton simple
     return GridView.builder(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
@@ -369,9 +398,16 @@ class _EmptyBox extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.warehouse_rounded, size: 44, color: Palette.primary.withOpacity(0.85)),
+            Icon(
+              Icons.warehouse_rounded,
+              size: 44,
+              color: Palette.primary.withOpacity(0.85),
+            ),
             const SizedBox(height: 10),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+            ),
             const SizedBox(height: 6),
             Text(
               subtitle,
@@ -402,9 +438,14 @@ class _ErrorBox extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(Icons.error_outline_rounded, color: Palette.statsDanger.withOpacity(0.9)),
+            Icon(
+              Icons.error_outline_rounded,
+              color: Palette.statsDanger.withOpacity(0.9),
+            ),
             const SizedBox(width: 12),
-            Expanded(child: Text(message, style: const TextStyle(color: Palette.ink))),
+            Expanded(
+              child: Text(message, style: const TextStyle(color: Palette.ink)),
+            ),
           ],
         ),
       ),
@@ -488,7 +529,6 @@ class _AddAlmacenDialogState extends State<_AddAlmacenDialog> {
                 ),
               ),
               const SizedBox(height: 14),
-
               Form(
                 key: _formKey,
                 child: Column(
@@ -504,17 +544,19 @@ class _AddAlmacenDialogState extends State<_AddAlmacenDialog> {
                         ),
                       ),
                       validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Ingresa un nombre';
+                        if (v == null || v.trim().isEmpty)
+                          return 'Ingresa un nombre';
                         if (v.trim().length < 3) return 'Mínimo 3 caracteres';
                         return null;
                       },
                     ),
                     const SizedBox(height: 12),
-
                     DropdownButtonFormField<String>(
                       value: _depto,
                       items: deptosBolivia
-                          .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                          .map(
+                            (d) => DropdownMenuItem(value: d, child: Text(d)),
+                          )
                           .toList(),
                       onChanged: (v) => setState(() => _depto = v ?? _depto),
                       decoration: InputDecoration(
@@ -527,7 +569,6 @@ class _AddAlmacenDialogState extends State<_AddAlmacenDialog> {
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     TextFormField(
                       controller: _descripcionCtrl,
                       minLines: 3,
@@ -544,9 +585,7 @@ class _AddAlmacenDialogState extends State<_AddAlmacenDialog> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 16),
-
               Row(
                 children: [
                   Expanded(
@@ -554,9 +593,13 @@ class _AddAlmacenDialogState extends State<_AddAlmacenDialog> {
                       onPressed: _saving ? null : () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Palette.ink,
-                        side: BorderSide(color: Palette.button.withOpacity(0.55)),
+                        side: BorderSide(
+                          color: Palette.button.withOpacity(0.55),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                       child: const Text(
                         'Cancelar',
@@ -573,7 +616,9 @@ class _AddAlmacenDialogState extends State<_AddAlmacenDialog> {
                         foregroundColor: Palette.white,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                       child: _saving
                           ? const SizedBox(
