@@ -33,9 +33,9 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
   void _printFirestoreIndexLink(Object error) {
     final raw = error.toString();
 
-    final match = RegExp(
-      r'(https:\/\/console\.firebase\.google\.com\/[^\s]+)',
-    ).firstMatch(raw);
+    final match =
+        RegExp(r'(https:\/\/console\.firebase\.google\.com\/[^\s]+)')
+            .firstMatch(raw);
 
     if (match != null) {
       debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -63,7 +63,7 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
       'descripcion': descripcion.trim(),
       'activo': true,
       'createdAt': FieldValue.serverTimestamp(),
-      // opcionales:
+      // opcionales (se recalculan en UI igual):
       'productos': 0,
       'stock': 0,
     });
@@ -111,6 +111,13 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
         .collection('almacenes')
         .orderBy('createdAt', descending: true)
         .snapshots();
+  }
+
+  /// ===========================
+  /// ✅ STREAM: PRODUCTOS (para conteo por almacén)
+  /// ===========================
+  Stream<QuerySnapshot<Map<String, dynamic>>> _productosStream() {
+    return FirebaseFirestore.instance.collection('productos').snapshots();
   }
 
   @override
@@ -181,118 +188,157 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: _almacenesStream(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  // ✅ imprime el link del índice en la terminal
-                  _printFirestoreIndexLink(snapshot.error!);
-
+              builder: (context, almacenesSnap) {
+                if (almacenesSnap.hasError) {
+                  _printFirestoreIndexLink(almacenesSnap.error!);
                   return _ErrorBox(
-                    message: 'Error al cargar almacenes: ${snapshot.error}',
+                    message: 'Error al cargar almacenes: ${almacenesSnap.error}',
                   );
                 }
 
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                if (almacenesSnap.connectionState == ConnectionState.waiting) {
                   return const _LoadingGrid();
                 }
 
-                final docs = snapshot.data?.docs ?? [];
+                final almacenesDocs = almacenesSnap.data?.docs ?? [];
 
-                final all = docs.map((d) {
-                  final data = d.data();
-                  return {
-                    'id': d.id,
-                    'nombre': (data['nombre'] ?? '').toString(),
-                    'departamento': (data['departamento'] ?? '').toString(),
-                    'descripcion': (data['descripcion'] ?? '').toString(),
-                    'productos': (data['productos'] ?? 0),
-                    'stock': (data['stock'] ?? 0),
-                  };
-                }).toList();
+                // 2do stream: productos para calcular totales por almacén
+                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: _productosStream(),
+                  builder: (context, productosSnap) {
+                    if (productosSnap.hasError) {
+                      return _ErrorBox(
+                        message:
+                            'Error al cargar productos para conteo: ${productosSnap.error}',
+                      );
+                    }
 
-                final filtered = selectedDepto == 'Todos'
-                    ? all
-                    : all
-                          .where((a) => a['departamento'] == selectedDepto)
-                          .toList();
+                    if (productosSnap.connectionState == ConnectionState.waiting) {
+                      return const _LoadingGrid();
+                    }
 
-                if (filtered.isEmpty) {
-                  return const _EmptyBox(
-                    title: 'No hay almacenes',
-                    subtitle:
-                        'Agrega un almacén o cambia el filtro de departamento.',
-                  );
-                }
+                    final productosDocs = productosSnap.data?.docs ?? [];
 
-                return GridView.builder(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 1.6,
-                  ),
-                  itemCount: filtered.length,
-                  itemBuilder: (_, i) {
-                    final a = filtered[i];
+                    // ✅ Construimos mapa: almacenId -> {productosCount, stockTotal}
+                    final Map<String, int> productosCountByAlmacen = {};
+                    final Map<String, int> stockTotalByAlmacen = {};
 
-                    return InkWell(
-                      borderRadius: BorderRadius.circular(18),
-                      onTap: () {
-                        // Si tienes página de detalle luego:
-                        Modular.to.pushNamed('/almacenes/${a['id']}');
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(18),
-                        decoration: BoxDecoration(
-                          color: Palette.white,
+                    for (final p in productosDocs) {
+                      final data = p.data();
+                      final almacenId = (data['almacenId'] ?? '').toString().trim();
+                      if (almacenId.isEmpty) continue;
+
+                      final stockRaw = data['stock'];
+                      final stock = (stockRaw is num) ? stockRaw.toInt() : 0;
+
+                      productosCountByAlmacen[almacenId] =
+                          (productosCountByAlmacen[almacenId] ?? 0) + 1;
+
+                      stockTotalByAlmacen[almacenId] =
+                          (stockTotalByAlmacen[almacenId] ?? 0) + stock;
+                    }
+
+                    final all = almacenesDocs.map((d) {
+                      final data = d.data();
+                      final id = d.id;
+
+                      final productos = productosCountByAlmacen[id] ?? 0;
+                      final stock = stockTotalByAlmacen[id] ?? 0;
+
+                      return {
+                        'id': id,
+                        'nombre': (data['nombre'] ?? '').toString(),
+                        'departamento': (data['departamento'] ?? '').toString(),
+                        'descripcion': (data['descripcion'] ?? '').toString(),
+                        // ✅ calculados:
+                        'productos': productos,
+                        'stock': stock,
+                        'activo': (data['activo'] is bool) ? (data['activo'] as bool) : true,
+                      };
+                    }).toList();
+
+                    final filtered = selectedDepto == 'Todos'
+                        ? all
+                        : all.where((a) => a['departamento'] == selectedDepto).toList();
+
+                    if (filtered.isEmpty) {
+                      return const _EmptyBox(
+                        title: 'No hay almacenes',
+                        subtitle: 'Agrega un almacén o cambia el filtro de departamento.',
+                      );
+                    }
+
+                    return GridView.builder(
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                        childAspectRatio: 1.6,
+                      ),
+                      itemCount: filtered.length,
+                      itemBuilder: (_, i) {
+                        final a = filtered[i];
+
+                        return InkWell(
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: Palette.button.withOpacity(0.45),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              blurRadius: 12,
-                              color: Colors.black.withOpacity(0.05),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              a['nombre'] as String,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: Palette.ink,
+                          onTap: () {
+                            Modular.to.pushNamed('/almacenes/${a['id']}');
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              color: Palette.white,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: Palette.button.withOpacity(0.45),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              a['departamento'] as String,
-                              style: TextStyle(
-                                color: Palette.primary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const Spacer(),
-                            Row(
-                              children: [
-                                _Stat(
-                                  label: 'Productos',
-                                  value: (a['productos'] ?? 0).toString(),
-                                ),
-                                const SizedBox(width: 16),
-                                _Stat(
-                                  label: 'Stock',
-                                  value: (a['stock'] ?? 0).toString(),
+                              boxShadow: [
+                                BoxShadow(
+                                  blurRadius: 12,
+                                  color: Colors.black.withOpacity(0.05),
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  a['nombre'] as String,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: Palette.ink,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  a['departamento'] as String,
+                                  style: TextStyle(
+                                    color: Palette.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Row(
+                                  children: [
+                                    _Stat(
+                                      label: 'Productos',
+                                      value: (a['productos'] ?? 0).toString(),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    _Stat(
+                                      label: 'Stock',
+                                      value: (a['stock'] ?? 0).toString(),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 );
@@ -544,8 +590,7 @@ class _AddAlmacenDialogState extends State<_AddAlmacenDialog> {
                         ),
                       ),
                       validator: (v) {
-                        if (v == null || v.trim().isEmpty)
-                          return 'Ingresa un nombre';
+                        if (v == null || v.trim().isEmpty) return 'Ingresa un nombre';
                         if (v.trim().length < 3) return 'Mínimo 3 caracteres';
                         return null;
                       },
@@ -554,9 +599,7 @@ class _AddAlmacenDialogState extends State<_AddAlmacenDialog> {
                     DropdownButtonFormField<String>(
                       value: _depto,
                       items: deptosBolivia
-                          .map(
-                            (d) => DropdownMenuItem(value: d, child: Text(d)),
-                          )
+                          .map((d) => DropdownMenuItem(value: d, child: Text(d)))
                           .toList(),
                       onChanged: (v) => setState(() => _depto = v ?? _depto),
                       decoration: InputDecoration(
@@ -593,9 +636,7 @@ class _AddAlmacenDialogState extends State<_AddAlmacenDialog> {
                       onPressed: _saving ? null : () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Palette.ink,
-                        side: BorderSide(
-                          color: Palette.button.withOpacity(0.55),
-                        ),
+                        side: BorderSide(color: Palette.button.withOpacity(0.55)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
