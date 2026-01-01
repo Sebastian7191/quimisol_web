@@ -1,0 +1,77 @@
+{
+  "project_info": {
+    "project_number": "1011820326368",
+    "firebase_url": "https://quimisol-4f159-default-rtdb.firebaseio.com",
+    "project_id": "quimisol-4f159",
+    "storage_bucket": "quimisol-4f159.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1011820326368:android:a78abf2cae4575d3798f85",
+        "android_client_info": {
+          "package_name": "com.example.quimisol_web"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1011820326368-tj3knbspjjaugfasuenhb3uo6pho47bq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBPhA_MJbwQYqjNhcrcQWbJvJ4gPTplBgQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1011820326368-tj3knbspjjaugfasuenhb3uo6pho47bq.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1011820326368:android:da555f12ed3e7cbe798f85",
+        "android_client_info": {
+          "package_name": "com.quimisol.quimisol_movil"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1011820326368-ie96ej2gh4spv0ra9gl4up7mj5odi974.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.quimisol.quimisol_movil",
+            "certificate_hash": "ca77264ca7134bba4a6150ceda4b0cdc684ebbf1"
+          }
+        },
+        {
+          "client_id": "1011820326368-tj3knbspjjaugfasuenhb3uo6pho47bq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBPhA_MJbwQYqjNhcrcQWbJvJ4gPTplBgQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1011820326368-tj3knbspjjaugfasuenhb3uo6pho47bq.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
