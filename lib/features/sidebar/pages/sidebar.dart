@@ -1,3 +1,12 @@
+// lib/features/shell/sidebar_shell_page.dart
+//
+// ✅ Agregado "Pedidos" al sidebar + pages
+// ✅ IndexFromPath actualizado para /pedidos
+// ✅ Import de la nueva page PedidosPage (la que te pasé)
+//
+// OJO: ajusta el import de PedidosPage según dónde lo guardaste.
+// En mi ejemplo anterior: lib/features/admin/pedidos/pedidos_page.dart
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
@@ -6,9 +15,11 @@ import 'package:quimisol_web/core/theme/palette.dart';
 
 import 'package:quimisol_web/features/almacenes/pages/almacenes.dart';
 import 'package:quimisol_web/features/home/pages/dashboard.dart';
+import 'package:quimisol_web/features/pedidos/pages/pedidos.dart';
 import 'package:quimisol_web/features/productos/pages/productos.dart';
 import 'package:quimisol_web/features/unidades/pages/unidades.dart';
 import 'package:quimisol_web/features/usuarios/pages/usuarios.dart';
+
 
 class SidebarShellPage extends StatefulWidget {
   const SidebarShellPage({super.key});
@@ -56,6 +67,13 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
       label: 'Unidades',
       route: '/unidades',
     ),
+
+    // ✅ NUEVO: PEDIDOS
+    _SideItem(
+      icon: Icons.receipt_long_rounded,
+      label: 'Pedidos',
+      route: '/pedidos',
+    ),
   ];
 
   void _cancelCloseTimer() {
@@ -82,6 +100,10 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
     if (path.startsWith('/almacenes')) return 2; // incluye /almacenes/:id
     if (path.startsWith('/productos')) return 3;
     if (path.startsWith('/unidades')) return 4;
+
+    // ✅ NUEVO
+    if (path.startsWith('/pedidos')) return 5;
+
     return 0; // dashboard por defecto
   }
 
@@ -135,6 +157,9 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
       const AlmacenesPage(),
       const ProductosPage(),
       const UnidadesPage(),
+
+      // ✅ NUEVO
+      const PedidosPage(),
     ];
 
     return Scaffold(
