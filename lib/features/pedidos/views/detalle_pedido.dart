@@ -291,9 +291,9 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                         colors: [
-                          Palette.primary.withOpacity(0.96),
-                          Palette.secondary.withOpacity(0.92),
-                          Palette.button.withOpacity(0.96),
+                          Palette.primary.withValues(alpha: 0.96),
+                          Palette.secondary.withValues(alpha: 0.92),
+                          Palette.button.withValues(alpha: 0.96),
                         ],
                       ),
                     ),
@@ -303,10 +303,10 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                           height: 42,
                           width: 42,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.16),
+                            color: Colors.white.withValues(alpha: 0.16),
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.20),
+                              color: Colors.white.withValues(alpha: 0.20),
                             ),
                           ),
                           child: const Icon(
@@ -338,7 +338,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.85),
+                                  color: Colors.white.withValues(alpha: 0.85),
                                   fontWeight: FontWeight.w700,
                                   fontSize: 12.5,
                                 ),
@@ -355,7 +355,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                               : () => Navigator.pop(context),
                           icon: Icon(
                             Icons.close_rounded,
-                            color: Colors.white.withOpacity(0.92),
+                            color: Colors.white.withValues(alpha: 0.92),
                           ),
                         ),
                       ],
@@ -454,7 +454,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                               14,
                                             ),
                                             border: Border.all(
-                                              color: Palette.ink.withOpacity(
+                                              color: Palette.ink.withValues(alpha: 
                                                 0.06,
                                               ),
                                             ),
@@ -487,7 +487,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                         style: OutlinedButton.styleFrom(
                                           foregroundColor: Palette.primary,
                                           side: BorderSide(
-                                            color: Palette.primary.withOpacity(
+                                            color: Palette.primary.withValues(alpha: 
                                               0.30,
                                             ),
                                           ),
@@ -519,7 +519,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                       color: Palette.fieldBg,
                                       borderRadius: BorderRadius.circular(14),
                                       border: Border.all(
-                                        color: Palette.ink.withOpacity(0.06),
+                                        color: Palette.ink.withValues(alpha: 0.06),
                                       ),
                                     ),
                                     child: Row(
@@ -527,7 +527,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                         Icon(
                                           Icons.local_shipping_rounded,
                                           size: 18,
-                                          color: Palette.primary.withOpacity(
+                                          color: Palette.primary.withValues(alpha: 
                                             0.8,
                                           ),
                                         ),
@@ -548,7 +548,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                               border: InputBorder.none,
                                               isDense: true,
                                               hintStyle: TextStyle(
-                                                color: Palette.ink.withOpacity(
+                                                color: Palette.ink.withValues(alpha: 
                                                   0.45,
                                                 ),
                                                 fontWeight: FontWeight.w800,
@@ -566,7 +566,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                             vertical: 8,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: Palette.button.withOpacity(
+                                            color: Palette.button.withValues(alpha: 
                                               0.28,
                                             ),
                                             borderRadius: BorderRadius.circular(
@@ -574,13 +574,13 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                             ),
                                             border: Border.all(
                                               color: Palette.primary
-                                                  .withOpacity(0.10),
+                                                  .withValues(alpha: 0.10),
                                             ),
                                           ),
                                           child: Text(
                                             'Bs',
                                             style: TextStyle(
-                                              color: Palette.ink.withOpacity(
+                                              color: Palette.ink.withValues(alpha: 
                                                 0.85,
                                               ),
                                               fontWeight: FontWeight.w900,
@@ -622,10 +622,10 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: Palette.button.withOpacity(0.28),
+                                color: Palette.button.withValues(alpha: 0.28),
                                 borderRadius: BorderRadius.circular(999),
                                 border: Border.all(
-                                  color: Palette.primary.withOpacity(0.16),
+                                  color: Palette.primary.withValues(alpha: 0.16),
                                 ),
                               ),
                               child: Text(
@@ -685,7 +685,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                     decoration: BoxDecoration(
                       color: Palette.fieldBg,
                       border: Border(
-                        top: BorderSide(color: Palette.ink.withOpacity(0.06)),
+                        top: BorderSide(color: Palette.ink.withValues(alpha: 0.06)),
                       ),
                     ),
                     child: Row(
@@ -696,7 +696,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Palette.ink.withOpacity(0.62),
+                              color: Palette.ink.withValues(alpha: 0.62),
                               fontWeight: FontWeight.w700,
                               fontSize: 12,
                             ),
@@ -710,7 +710,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Palette.primary,
                             side: BorderSide(
-                              color: Palette.primary.withOpacity(0.25),
+                              color: Palette.primary.withValues(alpha: 0.25),
                             ),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
@@ -786,10 +786,10 @@ class _SectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Palette.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: ink.withOpacity(0.06)),
+        border: Border.all(color: ink.withValues(alpha: 0.06)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 18,
             offset: const Offset(0, 12),
           ),
@@ -805,9 +805,9 @@ class _SectionCard extends StatelessWidget {
                 height: 34,
                 width: 34,
                 decoration: BoxDecoration(
-                  color: Palette.button.withOpacity(0.26),
+                  color: Palette.button.withValues(alpha: 0.26),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Palette.primary.withOpacity(0.10)),
+                  border: Border.all(color: Palette.primary.withValues(alpha: 0.10)),
                 ),
                 child: Icon(icon, color: Palette.primary, size: 18),
               ),
@@ -854,7 +854,7 @@ class _EntregaInfo extends StatelessWidget {
         decoration: BoxDecoration(
           color: Palette.fieldBg,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: ink.withOpacity(0.06)),
+          border: Border.all(color: ink.withValues(alpha: 0.06)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -866,7 +866,7 @@ class _EntregaInfo extends StatelessWidget {
             Text(
               text.isEmpty ? '—' : text,
               style: TextStyle(
-                color: ink.withOpacity(0.78),
+                color: ink.withValues(alpha: 0.78),
                 fontWeight: FontWeight.w800,
                 fontSize: 12,
               ),
@@ -990,7 +990,7 @@ class _EditRow extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                color: ink.withOpacity(0.62),
+                color: ink.withValues(alpha: 0.62),
                 fontWeight: FontWeight.w900,
                 fontSize: 12,
               ),
@@ -1047,7 +1047,7 @@ class _EstadoEditor extends StatelessWidget {
       decoration: BoxDecoration(
         color: Palette.fieldBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ink.withOpacity(0.06)),
+        border: Border.all(color: ink.withValues(alpha: 0.06)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
@@ -1057,7 +1057,7 @@ class _EstadoEditor extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           icon: Icon(
             Icons.keyboard_arrow_down_rounded,
-            color: ink.withOpacity(0.55),
+            color: ink.withValues(alpha: 0.55),
           ),
           style: TextStyle(
             color: ink,
@@ -1175,7 +1175,7 @@ class _RepartidorPicker extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Palette.fieldBg,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: ink.withOpacity(0.06)),
+                border: Border.all(color: ink.withValues(alpha: 0.06)),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String?>(
@@ -1185,7 +1185,7 @@ class _RepartidorPicker extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                   icon: Icon(
                     Icons.keyboard_arrow_down_rounded,
-                    color: ink.withOpacity(0.55),
+                    color: ink.withValues(alpha: 0.55),
                   ),
                   style: TextStyle(
                     color: ink,
@@ -1196,7 +1196,7 @@ class _RepartidorPicker extends StatelessWidget {
                   hint: Text(
                     'Seleccionar repartidor…',
                     style: TextStyle(
-                      color: ink.withOpacity(0.55),
+                      color: ink.withValues(alpha: 0.55),
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -1236,12 +1236,12 @@ class _RepartidorPicker extends StatelessWidget {
       decoration: BoxDecoration(
         color: Palette.fieldBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ink.withOpacity(0.06)),
+        border: Border.all(color: ink.withValues(alpha: 0.06)),
       ),
       child: Text(
         text,
         style: TextStyle(
-          color: ink.withOpacity(0.7),
+          color: ink.withValues(alpha: 0.7),
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -1269,7 +1269,7 @@ class _ItemTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: Palette.fieldBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: ink.withOpacity(0.06)),
+        border: Border.all(color: ink.withValues(alpha: 0.06)),
       ),
       padding: const EdgeInsets.all(10),
       child: Row(
@@ -1307,9 +1307,9 @@ class _ItemTile extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: Palette.button.withOpacity(0.28),
+              color: Palette.button.withValues(alpha: 0.28),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Palette.primary.withOpacity(0.10)),
+              border: Border.all(color: Palette.primary.withValues(alpha: 0.10)),
             ),
             child: Text(
               _money(subtotal),
@@ -1331,12 +1331,12 @@ class _ItemTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: Palette.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Palette.ink.withOpacity(0.06)),
+        border: Border.all(color: Palette.ink.withValues(alpha: 0.06)),
       ),
       child: Text(
         text,
         style: TextStyle(
-          color: Palette.ink.withOpacity(0.72),
+          color: Palette.ink.withValues(alpha: 0.72),
           fontWeight: FontWeight.w800,
           fontSize: 11.5,
         ),
@@ -1358,21 +1358,21 @@ class _Thumb extends StatelessWidget {
       decoration: BoxDecoration(
         color: Palette.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: ink.withOpacity(0.08)),
+        border: Border.all(color: ink.withValues(alpha: 0.08)),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: url.isEmpty
             ? Icon(
                 Icons.image_not_supported_rounded,
-                color: Palette.primary.withOpacity(0.6),
+                color: Palette.primary.withValues(alpha: 0.6),
               )
             : Image.network(
                 url,
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Icon(
                   Icons.broken_image_rounded,
-                  color: Palette.primary.withOpacity(0.6),
+                  color: Palette.primary.withValues(alpha: 0.6),
                 ),
               ),
       ),
@@ -1398,7 +1398,7 @@ class _KeyValueList extends StatelessWidget {
             decoration: BoxDecoration(
               color: Palette.fieldBg,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: ink.withOpacity(0.06)),
+              border: Border.all(color: ink.withValues(alpha: 0.06)),
             ),
             child: Row(
               children: [
@@ -1407,7 +1407,7 @@ class _KeyValueList extends StatelessWidget {
                   child: Text(
                     rows[i].k,
                     style: TextStyle(
-                      color: ink.withOpacity(0.62),
+                      color: ink.withValues(alpha: 0.62),
                       fontWeight: FontWeight.w900,
                       fontSize: 12,
                     ),
@@ -1452,17 +1452,17 @@ class _EmptyBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: Palette.fieldBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: ink.withOpacity(0.06)),
+        border: Border.all(color: ink.withValues(alpha: 0.06)),
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline_rounded, color: ink.withOpacity(0.55)),
+          Icon(Icons.info_outline_rounded, color: ink.withValues(alpha: 0.55)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
               style: TextStyle(
-                color: ink.withOpacity(0.70),
+                color: ink.withValues(alpha: 0.70),
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -1484,19 +1484,19 @@ class _WarnBox extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Palette.button.withOpacity(0.16),
+        color: Palette.button.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Palette.primary.withOpacity(0.14)),
+        border: Border.all(color: Palette.primary.withValues(alpha: 0.14)),
       ),
       child: Row(
         children: [
-          Icon(Icons.warning_amber_rounded, color: ink.withOpacity(0.75)),
+          Icon(Icons.warning_amber_rounded, color: ink.withValues(alpha: 0.75)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
               style: TextStyle(
-                color: ink.withOpacity(0.78),
+                color: ink.withValues(alpha: 0.78),
                 fontWeight: FontWeight.w800,
                 fontSize: 12.2,
                 height: 1.2,
@@ -1539,9 +1539,9 @@ class _EstadoPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: c.withOpacity(0.16),
+        color: c.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: c.withOpacity(0.32)),
+        border: Border.all(color: c.withValues(alpha: 0.32)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1555,7 +1555,7 @@ class _EstadoPill extends StatelessWidget {
               fontWeight: FontWeight.w900,
               fontSize: 12,
               shadows: [
-                Shadow(blurRadius: 10, color: Colors.black.withOpacity(0.12)),
+                Shadow(blurRadius: 10, color: Colors.black.withValues(alpha: 0.12)),
               ],
             ),
           ),

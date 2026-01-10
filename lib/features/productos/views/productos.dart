@@ -10,10 +10,13 @@
 //   image_picker_web: ^4.0.0
 
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/material.dart';
+import '../controllers/products_controller.dart';
+import '../data/producto_row.dart';
+import '../data/form_result.dart';
+import '../data/unidad_option.dart';
+import '../data/almacen_option.dart';
 import 'package:image_picker_web/image_picker_web.dart';
 
 import 'package:quimisol_web/core/theme/palette.dart';
@@ -31,18 +34,7 @@ class _ProductosPageState extends State<ProductosPage> {
 
   String _tipo = 'Todos'; // Todos | PRODUCTO | INSUMO
 
-  CollectionReference<Map<String, dynamic>> get _productosRef =>
-      FirebaseFirestore.instance.collection('productos');
-
-  CollectionReference<Map<String, dynamic>> get _unidadesRef =>
-      FirebaseFirestore.instance.collection('unidades');
-
-  CollectionReference<Map<String, dynamic>> get _almacenesRef =>
-      FirebaseFirestore.instance.collection('almacenes');
-
-  // ✅ Storage con tu bucket exacto
-  FirebaseStorage get _storage =>
-      FirebaseStorage.instanceFor(bucket: 'gs://quimisol-4f159.firebasestorage.app');
+  final controller = ProductosController();
 
   @override
   void initState() {
@@ -59,96 +51,28 @@ class _ProductosPageState extends State<ProductosPage> {
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _productosStream() {
-    return _productosRef.snapshots();
+    return controller.productosStream();
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _unidadesStream() {
-    return _unidadesRef.snapshots();
+    return controller.unidadesStream();
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _almacenesStream() {
-    // Si quieres SOLO activos:
-    // return _almacenesRef.where('activo', isEqualTo: true).snapshots();
-    return _almacenesRef.snapshots();
-  }
-
-  String _sanitizeFilename(String name) {
-    final cleaned = name.trim().replaceAll(RegExp(r'\s+'), '_');
-    if (cleaned.isEmpty) return 'imagen.png';
-    return cleaned.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '');
-  }
-
-  String _guessExtFromBytes(Uint8List bytes) {
-    // JPG: FF D8 FF
-    if (bytes.length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) {
-      return 'jpg';
-    }
-    // PNG: 89 50 4E 47
-    if (bytes.length >= 4 &&
-        bytes[0] == 0x89 &&
-        bytes[1] == 0x50 &&
-        bytes[2] == 0x4E &&
-        bytes[3] == 0x47) {
-      return 'png';
-    }
-    // WEBP: "RIFF....WEBP"
-    if (bytes.length >= 12 &&
-        bytes[0] == 0x52 &&
-        bytes[1] == 0x49 &&
-        bytes[2] == 0x46 &&
-        bytes[3] == 0x46 &&
-        bytes[8] == 0x57 &&
-        bytes[9] == 0x45 &&
-        bytes[10] == 0x42 &&
-        bytes[11] == 0x50) {
-      return 'webp';
-    }
-    return 'png';
-  }
-
-  String _contentTypeFromExt(String ext) {
-    final e = ext.toLowerCase();
-    if (e == 'jpg' || e == 'jpeg') return 'image/jpeg';
-    if (e == 'webp') return 'image/webp';
-    return 'image/png';
-  }
-
-  Future<Map<String, String>> _uploadProductImage({
-    required String productId,
-    required Uint8List bytes,
-    String? filename,
-  }) async {
-    final ext = _guessExtFromBytes(bytes);
-    final safeName = _sanitizeFilename((filename ?? '').trim());
-    final finalName = safeName.contains('.') ? safeName : 'imagen.$ext';
-
-    final path = 'productos_e_insumos/$productId/$finalName';
-    final ref = _storage.ref().child(path);
-
-    final meta = SettableMetadata(contentType: _contentTypeFromExt(ext));
-
-    await ref.putData(bytes, meta);
-    final url = await ref.getDownloadURL();
-
-    return {'url': url, 'path': path};
-  }
-
-  Future<void> _deleteOldImageIfAny(String? oldPath) async {
-    if (oldPath == null || oldPath.trim().isEmpty) return;
-    try {
-      await _storage.ref().child(oldPath.trim()).delete();
-    } catch (_) {}
+    return controller.almacenesStream();
   }
 
   Future<void> _openAddDialog({
-    required List<_UnidadOption> unidades,
-    required List<_AlmacenOption> almacenes,
+    required List<UnidadOption> unidades,
+    required List<AlmacenOption> almacenes,
   }) async {
     if (almacenes.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Primero crea al menos un almacén en la colección "almacenes".'),
+            content: Text(
+              'Primero crea al menos un almacén en la colección "almacenes".',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -156,59 +80,35 @@ class _ProductosPageState extends State<ProductosPage> {
       return;
     }
 
-    final res = await showDialog<_ProductoFormResult>(
+    final res = await showDialog<ProductoFormResult>(
       context: context,
       barrierDismissible: false,
       builder: (_) => _ProductoDialog(
         title: 'Agregar producto',
         unidades: unidades,
         almacenes: almacenes,
-        storage: _storage,
       ),
     );
 
     if (res == null) return;
 
     try {
-      final docRef = _productosRef.doc();
-      final id = docRef.id;
-
-      String imagenUrl = '';
-      String imagenPath = '';
-
-      if (res.imageBytes != null) {
-        final up = await _uploadProductImage(
-          productId: id,
-          bytes: res.imageBytes!,
-          filename: res.imageName,
-        );
-        imagenUrl = up['url'] ?? '';
-        imagenPath = up['path'] ?? '';
-      }
-
-      await docRef.set({
-        'codigo': res.codigo.trim(),
-        'nombre': res.nombre.trim(),
-        'descripcion': res.descripcion.trim(),
-        'tipoItem': res.tipoItem,
-        'unidadId': res.unidadId,
-        'unidadNombre': res.unidadNombre,
-        'precio': res.precio,
-
-        // ✅ NUEVO: stock entero
-        'stock': res.stock,
-
-        'imagenUrl': imagenUrl,
-        'imagenPath': imagenPath,
-
-        // ✅ almacén
-        'almacenId': res.almacenId,
-        'almacenNombre': res.almacenNombre,
-
-        'activo': true,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      await controller.crearProducto(
+        ProductoFormResult(
+          codigo: res.codigo,
+          nombre: res.nombre,
+          descripcion: res.descripcion,
+          tipoItem: res.tipoItem,
+          unidadId: res.unidadId,
+          unidadNombre: res.unidadNombre,
+          precio: res.precio,
+          stock: res.stock,
+          imageBytes: res.imageBytes,
+          imageName: res.imageName,
+          almacenId: res.almacenId,
+          almacenNombre: res.almacenNombre,
+        ),
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -229,78 +129,60 @@ class _ProductosPageState extends State<ProductosPage> {
 
   Future<void> _openEditDialog({
     required String id,
-    required Map<String, dynamic> data,
-    required List<_UnidadOption> unidades,
-    required List<_AlmacenOption> almacenes,
+    required ProductoRow product,
+    required List<UnidadOption> unidades,
+    required List<AlmacenOption> almacenes,
   }) async {
-    final res = await showDialog<_ProductoFormResult>(
+    final res = await showDialog<ProductoFormResult>(
       context: context,
       barrierDismissible: false,
       builder: (_) => _ProductoDialog(
         title: 'Editar producto',
         unidades: unidades,
         almacenes: almacenes,
-        storage: _storage,
-        initialCodigo: (data['codigo'] ?? '').toString(),
-        initialNombre: (data['nombre'] ?? '').toString(),
-        initialDescripcion: (data['descripcion'] ?? '').toString(),
-        initialTipoItem: (data['tipoItem'] ?? 'PRODUCTO').toString(),
-        initialUnidadId: (data['unidadId'] ?? '').toString(),
-        initialPrecio: (data['precio'] ?? 0).toString(),
+        initialCodigo: product.codigo,
+        initialNombre: product.nombre,
+        initialDescripcion: product.descripcion,
+        initialTipoItem: product.tipoItem,
+        initialUnidadId: product.unidadId,
+        initialPrecio: product.precio.toString(),
 
-        // ✅ stock inicial
-        initialStock: (data['stock'] ?? 0).toString(),
+        // stock inicial
+        initialStock: product.stock.toString(),
 
-        initialImagenUrl: (data['imagenUrl'] ?? '').toString(),
-        initialImagenPath: (data['imagenPath'] ?? '').toString(),
-        initialAlmacenId: (data['almacenId'] ?? '').toString(),
+        initialImagenUrl: product.imagenUrl,
+        initialImagenPath: product.imagenPath,
+        initialAlmacenId: product.almacenId,
       ),
     );
 
     if (res == null) return;
 
     try {
-      String imagenUrl = (data['imagenUrl'] ?? '').toString();
-      String imagenPath = (data['imagenPath'] ?? '').toString();
-
-      if (res.imageBytes != null) {
-        await _deleteOldImageIfAny(imagenPath);
-
-        final up = await _uploadProductImage(
-          productId: id,
-          bytes: res.imageBytes!,
-          filename: res.imageName,
-        );
-        imagenUrl = up['url'] ?? '';
-        imagenPath = up['path'] ?? '';
-      }
-
-      await _productosRef.doc(id).update({
-        'codigo': res.codigo.trim(),
-        'nombre': res.nombre.trim(),
-        'descripcion': res.descripcion.trim(),
-        'tipoItem': res.tipoItem,
-        'unidadId': res.unidadId,
-        'unidadNombre': res.unidadNombre,
-        'precio': res.precio,
-
-        // ✅ NUEVO: stock entero
-        'stock': res.stock,
-
-        'imagenUrl': imagenUrl,
-        'imagenPath': imagenPath,
-
-        // ✅ almacén
-        'almacenId': res.almacenId,
-        'almacenNombre': res.almacenNombre,
-
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      await controller.actualizarProducto(
+        id,
+        ProductoFormResult(
+          codigo: res.codigo,
+          nombre: res.nombre,
+          descripcion: res.descripcion,
+          tipoItem: res.tipoItem,
+          unidadId: res.unidadId,
+          unidadNombre: res.unidadNombre,
+          precio: res.precio,
+          stock: res.stock,
+          imageBytes: res.imageBytes,
+          imageName: res.imageName,
+          almacenId: res.almacenId,
+          almacenNombre: res.almacenNombre,
+        ),
+        existingImagenUrl: product.imagenUrl,
+        existingImagenPath: product.imagenPath,
+      );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Producto actualizado')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Producto actualizado')));
       }
     } catch (e) {
       if (mounted) {
@@ -331,7 +213,7 @@ class _ProductosPageState extends State<ProductosPage> {
         ),
         content: Text(
           '¿Seguro que quieres eliminar "$nombre"?',
-          style: TextStyle(color: Palette.ink.withOpacity(0.85)),
+          style: TextStyle(color: Palette.ink.withValues(alpha: 0.85)),
         ),
         actions: [
           TextButton(
@@ -343,9 +225,14 @@ class _ProductosPageState extends State<ProductosPage> {
             style: ElevatedButton.styleFrom(
               backgroundColor: Palette.statsDanger,
               foregroundColor: Palette.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            child: const Text('Eliminar', style: TextStyle(fontWeight: FontWeight.w800)),
+            child: const Text(
+              'Eliminar',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       ),
@@ -354,13 +241,12 @@ class _ProductosPageState extends State<ProductosPage> {
     if (ok != true) return;
 
     try {
-      await _productosRef.doc(id).delete();
-      await _deleteOldImageIfAny(imagenPath);
+      await controller.eliminarProducto(id, imagenPath);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Producto eliminado')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Producto eliminado')));
       }
     } catch (e) {
       if (mounted) {
@@ -385,7 +271,6 @@ class _ProductosPageState extends State<ProductosPage> {
         title: title,
         imagenPath: imagenPath,
         imagenUrl: imagenUrl,
-        storage: _storage,
       ),
     );
   }
@@ -394,18 +279,21 @@ class _ProductosPageState extends State<ProductosPage> {
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: _unidadesStream(),
+
       builder: (context, unidadesSnap) {
         if (unidadesSnap.hasError) {
           return Padding(
             padding: const EdgeInsets.all(20),
-            child: _ErrorBox(message: 'Error al cargar unidades: ${unidadesSnap.error}'),
+            child: _ErrorBox(
+              message: 'Error al cargar unidades: ${unidadesSnap.error}',
+            ),
           );
         }
 
         final unidadesDocs = unidadesSnap.data?.docs ?? [];
         final unidades = unidadesDocs.map((d) {
           final data = d.data();
-          return _UnidadOption(
+          return UnidadOption(
             id: d.id,
             nombre: (data['nombre'] ?? '').toString(),
             abreviatura: (data['abreviatura'] ?? '').toString(),
@@ -414,11 +302,14 @@ class _ProductosPageState extends State<ProductosPage> {
 
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: _almacenesStream(),
+
           builder: (context, almacenesSnap) {
             if (almacenesSnap.hasError) {
               return Padding(
                 padding: const EdgeInsets.all(20),
-                child: _ErrorBox(message: 'Error al cargar almacenes: ${almacenesSnap.error}'),
+                child: _ErrorBox(
+                  message: 'Error al cargar almacenes: ${almacenesSnap.error}',
+                ),
               );
             }
 
@@ -426,10 +317,12 @@ class _ProductosPageState extends State<ProductosPage> {
             final almacenes = almacenesDocs
                 .map((d) {
                   final data = d.data();
-                  return _AlmacenOption(
+                  return AlmacenOption(
                     id: d.id,
                     nombre: (data['nombre'] ?? '').toString(),
-                    activo: (data['activo'] is bool) ? (data['activo'] as bool) : true,
+                    activo: (data['activo'] is bool)
+                        ? (data['activo'] as bool)
+                        : true,
                   );
                 })
                 .where((a) => a.activo)
@@ -455,16 +348,26 @@ class _ProductosPageState extends State<ProductosPage> {
                       ElevatedButton.icon(
                         onPressed: (unidades.isEmpty || almacenes.isEmpty)
                             ? null
-                            : () => _openAddDialog(unidades: unidades, almacenes: almacenes),
+                            : () => _openAddDialog(
+                                unidades: unidades,
+                                almacenes: almacenes,
+                              ),
                         icon: const Icon(Icons.add_rounded),
                         label: const Text('Agregar producto'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Palette.button,
                           foregroundColor: Palette.white,
                           elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ],
@@ -477,18 +380,25 @@ class _ProductosPageState extends State<ProductosPage> {
                       decoration: BoxDecoration(
                         color: Palette.card,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Palette.button.withOpacity(0.35)),
+                        border: Border.all(
+                          color: Palette.button.withValues(alpha: 0.35),
+                        ),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.info_outline_rounded, color: Palette.ink.withOpacity(0.8)),
+                          Icon(
+                            Icons.info_outline_rounded,
+                            color: Palette.ink.withValues(alpha: 0.8),
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               unidades.isEmpty
                                   ? 'Primero crea al menos una unidad (Ej: Kilogramo, Litro, Unidad).'
                                   : 'Primero crea al menos un almacén en la colección "almacenes".',
-                              style: TextStyle(color: Palette.ink.withOpacity(0.85)),
+                              style: TextStyle(
+                                color: Palette.ink.withValues(alpha: 0.85),
+                              ),
                             ),
                           ),
                         ],
@@ -508,18 +418,28 @@ class _ProductosPageState extends State<ProductosPage> {
                             hintText: 'Buscar por código o nombre...',
                             filled: true,
                             fillColor: Palette.fieldBg,
-                            prefixIcon: Icon(Icons.search_rounded, color: Palette.ink.withOpacity(0.65)),
+                            prefixIcon: Icon(
+                              Icons.search_rounded,
+                              color: Palette.ink.withValues(alpha: 0.65),
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(color: Palette.button.withOpacity(0.35)),
+                              borderSide: BorderSide(
+                                color: Palette.button.withValues(alpha: 0.35),
+                              ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(color: Palette.button.withOpacity(0.25)),
+                              borderSide: BorderSide(
+                                color: Palette.button.withValues(alpha: 0.25),
+                              ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(color: Palette.primary.withOpacity(0.8), width: 1.6),
+                              borderSide: BorderSide(
+                                color: Palette.primary.withValues(alpha: 0.8),
+                                width: 1.6,
+                              ),
                             ),
                           ),
                         ),
@@ -531,9 +451,16 @@ class _ProductosPageState extends State<ProductosPage> {
                         label: const Text('Limpiar'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Palette.ink,
-                          side: BorderSide(color: Palette.button.withOpacity(0.55)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          side: BorderSide(
+                            color: Palette.button.withValues(alpha: 0.55),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                         ),
                       ),
                     ],
@@ -567,72 +494,48 @@ class _ProductosPageState extends State<ProductosPage> {
                   Expanded(
                     child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: _productosStream(),
+
                       builder: (context, snapshot) {
                         if (snapshot.hasError) {
-                          return _ErrorBox(message: 'Error al cargar productos: ${snapshot.error}');
+                          return _ErrorBox(
+                            message:
+                                'Error al cargar productos: ${snapshot.error}',
+                          );
                         }
 
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const _LoadingTable(icon: Icons.inventory_2_rounded);
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const _LoadingTable(
+                            icon: Icons.inventory_2_rounded,
+                          );
                         }
 
                         final docs = snapshot.data?.docs ?? [];
 
-                        final rows = docs.map((d) {
-                          final data = d.data();
-                          final ts = data['createdAt'];
-                          DateTime? created;
-                          if (ts is Timestamp) created = ts.toDate();
+                        final productos = docs
+                            .map((d) => controller.mapProducto(d))
+                            .toList();
 
-                          final precioRaw = data['precio'];
-                          final precio = (precioRaw is num) ? precioRaw.toDouble() : 0.0;
-
-                          final stockRaw = data['stock'];
-                          final stock = (stockRaw is num) ? stockRaw.toInt() : 0;
-
-                          return {
-                            'id': d.id,
-                            'codigo': (data['codigo'] ?? '').toString(),
-                            'nombre': (data['nombre'] ?? '').toString(),
-                            'tipoItem': (data['tipoItem'] ?? 'PRODUCTO').toString(),
-                            'unidadNombre': (data['unidadNombre'] ?? '').toString(),
-                            'unidadId': (data['unidadId'] ?? '').toString(),
-                            'descripcion': (data['descripcion'] ?? '').toString(),
-                            'precio': precio,
-                            'stock': stock,
-                            'createdAt': created,
-                            'imagenUrl': (data['imagenUrl'] ?? '').toString(),
-                            'imagenPath': (data['imagenPath'] ?? '').toString(),
-                            'almacenId': (data['almacenId'] ?? '').toString(),
-                            'almacenNombre': (data['almacenNombre'] ?? '').toString(),
-                          };
-                        }).toList();
-
-                        rows.sort((a, b) {
-                          final da = a['createdAt'] as DateTime?;
-                          final db = b['createdAt'] as DateTime?;
+                        productos.sort((a, b) {
+                          final da = a.createdAt;
+                          final db = b.createdAt;
                           if (da == null && db == null) return 0;
                           if (da == null) return 1;
                           if (db == null) return -1;
                           return db.compareTo(da);
                         });
 
-                        final byTipo = _tipo == 'Todos'
-                            ? rows
-                            : rows.where((r) => r['tipoItem'] == _tipo).toList();
-
-                        final filtered = _search.isEmpty
-                            ? byTipo
-                            : byTipo.where((r) {
-                                final c = (r['codigo'] as String).toLowerCase();
-                                final n = (r['nombre'] as String).toLowerCase();
-                                return c.contains(_search) || n.contains(_search);
-                              }).toList();
+                        final filtered = controller.filterProductos(
+                          rows: productos,
+                          search: _search,
+                          tipo: _tipo,
+                        );
 
                         if (filtered.isEmpty) {
                           return const _EmptyBox(
                             title: 'No hay productos',
-                            subtitle: 'Agrega un producto o ajusta tus filtros.',
+                            subtitle:
+                                'Agrega un producto o ajusta tus filtros.',
                             icon: Icons.inventory_2_rounded,
                           );
                         }
@@ -641,7 +544,9 @@ class _ProductosPageState extends State<ProductosPage> {
                           decoration: BoxDecoration(
                             color: Palette.white,
                             borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: Palette.button.withOpacity(0.35)),
+                            border: Border.all(
+                              color: Palette.button.withValues(alpha: 0.35),
+                            ),
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(18),
@@ -666,40 +571,43 @@ class _ProductosPageState extends State<ProductosPage> {
                                   DataColumn(label: Text('Precio')),
                                   DataColumn(label: Text('Acciones')),
                                 ],
-                                rows: filtered.map((r) {
-                                  final id = r['id'] as String;
-                                  final codigo = r['codigo'] as String;
-                                  final nombre = r['nombre'] as String;
-                                  final tipoItem = r['tipoItem'] as String;
-                                  final unidadNombre = r['unidadNombre'] as String;
-                                  final desc = r['descripcion'] as String;
-                                  final stock = (r['stock'] as int);
-                                  final precio = (r['precio'] as double);
-                                  final imagenUrl = (r['imagenUrl'] as String).trim();
-                                  final imagenPath = (r['imagenPath'] as String).trim();
+                                rows: filtered.map((p) {
+                                  final id = p.id;
+                                  final codigo = p.codigo;
+                                  final nombre = p.nombre;
+                                  final tipoItem = p.tipoItem;
+                                  final unidadNombre = p.unidadNombre;
+                                  final desc = p.descripcion;
+                                  final stock = p.stock;
+                                  final precio = p.precio;
+                                  final imagenUrl = p.imagenUrl.trim();
+                                  final imagenPath = p.imagenPath.trim();
 
                                   return DataRow(
                                     cells: [
                                       DataCell(
                                         InkWell(
-                                          onTap: (imagenPath.isEmpty && imagenUrl.isEmpty)
+                                          onTap:
+                                              (imagenPath.isEmpty &&
+                                                  imagenUrl.isEmpty)
                                               ? null
                                               : () => _openImageViewer(
-                                                    title: nombre,
-                                                    imagenPath: imagenPath,
-                                                    imagenUrl: imagenUrl,
-                                                  ),
+                                                  title: nombre,
+                                                  imagenPath: imagenPath,
+                                                  imagenUrl: imagenUrl,
+                                                ),
                                           child: _ProductoThumb(
                                             imagenPath: imagenPath,
                                             imagenUrl: imagenUrl,
-                                            storage: _storage,
                                           ),
                                         ),
                                       ),
                                       DataCell(
                                         Text(
                                           codigo.isEmpty ? '-' : codigo,
-                                          style: const TextStyle(fontWeight: FontWeight.w700),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                          ),
                                         ),
                                       ),
                                       DataCell(
@@ -709,7 +617,9 @@ class _ProductosPageState extends State<ProductosPage> {
                                             nombre.isEmpty ? '-' : nombre,
                                             maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontWeight: FontWeight.w700),
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -717,15 +627,27 @@ class _ProductosPageState extends State<ProductosPage> {
                                         SizedBox(
                                           width: 320,
                                           child: Text(
-                                            desc.trim().isEmpty ? '-' : desc.trim(),
+                                            desc.trim().isEmpty
+                                                ? '-'
+                                                : desc.trim(),
                                             maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(color: Palette.ink.withOpacity(0.85)),
+                                            style: TextStyle(
+                                              color: Palette.ink.withValues(alpha: 
+                                                0.85,
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
                                       DataCell(_ChipTipo(tipoItem: tipoItem)),
-                                      DataCell(Text(unidadNombre.isEmpty ? '-' : unidadNombre)),
+                                      DataCell(
+                                        Text(
+                                          unidadNombre.isEmpty
+                                              ? '-'
+                                              : unidadNombre,
+                                        ),
+                                      ),
                                       DataCell(Text(stock.toString())),
                                       DataCell(Text(precio.toStringAsFixed(2))),
                                       DataCell(
@@ -735,11 +657,14 @@ class _ProductosPageState extends State<ProductosPage> {
                                               tooltip: 'Editar',
                                               onPressed: () => _openEditDialog(
                                                 id: id,
-                                                data: r,
+                                                product: p,
                                                 unidades: unidades,
                                                 almacenes: almacenes,
                                               ),
-                                              icon: Icon(Icons.edit_rounded, color: Palette.primary),
+                                              icon: Icon(
+                                                Icons.edit_rounded,
+                                                color: Palette.primary,
+                                              ),
                                             ),
                                             IconButton(
                                               tooltip: 'Eliminar',
@@ -750,7 +675,8 @@ class _ProductosPageState extends State<ProductosPage> {
                                               ),
                                               icon: Icon(
                                                 Icons.delete_outline_rounded,
-                                                color: Palette.statsDanger.withOpacity(0.95),
+                                                color: Palette.statsDanger
+                                                    .withValues(alpha: 0.95),
                                               ),
                                             ),
                                           ],
@@ -784,8 +710,8 @@ class _ChipTipo extends StatelessWidget {
   Widget build(BuildContext context) {
     final isProducto = tipoItem == 'PRODUCTO';
     final bg = isProducto
-        ? Palette.statsSuccess.withOpacity(0.15)
-        : Palette.statsWarning.withOpacity(0.18);
+        ? Palette.statsSuccess.withValues(alpha: 0.15)
+        : Palette.statsWarning.withValues(alpha: 0.18);
     final fg = isProducto ? Palette.statsSuccess : Palette.statsWarning;
 
     return Container(
@@ -793,12 +719,12 @@ class _ChipTipo extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: fg.withOpacity(0.35)),
+        border: Border.all(color: fg.withValues(alpha: 0.35)),
       ),
       child: Text(
         tipoItem,
         style: TextStyle(
-          color: fg.withOpacity(0.95),
+          color: fg.withValues(alpha: 0.95),
           fontWeight: FontWeight.w800,
           fontSize: 12,
         ),
@@ -811,26 +737,8 @@ class _ChipTipo extends StatelessWidget {
 class _ProductoThumb extends StatelessWidget {
   final String imagenPath;
   final String imagenUrl;
-  final FirebaseStorage storage;
 
-  const _ProductoThumb({
-    required this.imagenPath,
-    required this.imagenUrl,
-    required this.storage,
-  });
-
-  Future<Uint8List?> _loadBytes() async {
-    final path = imagenPath.trim();
-    if (path.isNotEmpty) {
-      try {
-        final data = await storage.ref().child(path).getData(2 * 1024 * 1024);
-        return data;
-      } catch (e) {
-        debugPrint('❌ getData falló path="$path" error=$e');
-      }
-    }
-    return null;
-  }
+  const _ProductoThumb({required this.imagenPath, required this.imagenUrl});
 
   @override
   Widget build(BuildContext context) {
@@ -839,66 +747,26 @@ class _ProductoThumb extends StatelessWidget {
       height: 54,
       decoration: BoxDecoration(
         color: Palette.fieldBg,
-        border: Border.all(color: Palette.button.withOpacity(0.35)),
+        border: Border.all(color: Palette.button.withValues(alpha: 0.35)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Center(
-        child: Icon(Icons.image_outlined, color: Palette.ink.withOpacity(0.35)),
+        child: Icon(Icons.image_outlined, color: Palette.ink.withValues(alpha: 0.35)),
       ),
     );
 
-    if (!kIsWeb) {
-      final url = imagenUrl.trim();
-      if (url.isEmpty) return placeholder;
+    final url = imagenUrl.trim();
+    if (url.isEmpty) return placeholder;
 
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.network(
-          url,
-          width: 54,
-          height: 54,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => placeholder,
-        ),
-      );
-    }
-
-    return FutureBuilder<Uint8List?>(
-      future: _loadBytes(),
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: Palette.fieldBg,
-              border: Border.all(color: Palette.button.withOpacity(0.35)),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Center(
-              child: SizedBox(
-                height: 18,
-                width: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          );
-        }
-
-        final bytes = snap.data;
-        if (bytes == null || bytes.isEmpty) return placeholder;
-
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Image.memory(
-            bytes,
-            width: 54,
-            height: 54,
-            fit: BoxFit.cover,
-            gaplessPlayback: true,
-          ),
-        );
-      },
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.network(
+        url,
+        width: 54,
+        height: 54,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => placeholder,
+      ),
     );
   }
 }
@@ -907,20 +775,37 @@ class _ImageViewerDialog extends StatelessWidget {
   final String title;
   final String imagenPath;
   final String imagenUrl;
-  final FirebaseStorage storage;
 
   const _ImageViewerDialog({
     required this.title,
     required this.imagenPath,
     required this.imagenUrl,
-    required this.storage,
   });
 
-  Future<String> _resolve() async {
-    if (imagenPath.trim().isNotEmpty) {
-      return await storage.ref().child(imagenPath.trim()).getDownloadURL();
+  Widget _buildImageContent(String imagenUrl) {
+    final url = imagenUrl.trim();
+    if (url.isEmpty) {
+      return Center(
+        child: Text(
+          'Sin imagen',
+          style: TextStyle(color: Palette.ink.withValues(alpha: 0.7)),
+        ),
+      );
     }
-    return imagenUrl.trim();
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Center(
+        child: Text(
+          'No se pudo cargar la imagen',
+          style: TextStyle(color: Palette.ink.withValues(alpha: 0.75)),
+        ),
+      ),
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return const Center(child: CircularProgressIndicator());
+      },
+    );
   }
 
   @override
@@ -949,37 +834,7 @@ class _ImageViewerDialog extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
                 child: AspectRatio(
                   aspectRatio: 16 / 9,
-                  child: FutureBuilder<String>(
-                    future: _resolve(),
-                    builder: (context, snap) {
-                      if (!snap.hasData) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      final url = (snap.data ?? '').trim();
-                      if (url.isEmpty) {
-                        return Center(
-                          child: Text(
-                            'Sin imagen',
-                            style: TextStyle(color: Palette.ink.withOpacity(0.7)),
-                          ),
-                        );
-                      }
-                      return Image.network(
-                        url,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Center(
-                          child: Text(
-                            'No se pudo cargar la imagen',
-                            style: TextStyle(color: Palette.ink.withOpacity(0.75)),
-                          ),
-                        ),
-                        loadingBuilder: (context, child, progress) {
-                          if (progress == null) return child;
-                          return const Center(child: CircularProgressIndicator());
-                        },
-                      );
-                    },
-                  ),
+                  child: _buildImageContent(imagenUrl),
                 ),
               ),
               const SizedBox(height: 14),
@@ -990,9 +845,14 @@ class _ImageViewerDialog extends StatelessWidget {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Palette.button,
                     foregroundColor: Palette.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                  child: const Text('Cerrar', style: TextStyle(fontWeight: FontWeight.w800)),
+                  child: const Text(
+                    'Cerrar',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
                 ),
               ),
             ],
@@ -1003,36 +863,7 @@ class _ImageViewerDialog extends StatelessWidget {
   }
 }
 
-class _UnidadOption {
-  final String id;
-  final String nombre;
-  final String abreviatura;
-
-  const _UnidadOption({
-    required this.id,
-    required this.nombre,
-    required this.abreviatura,
-  });
-
-  String get label {
-    if (abreviatura.trim().isEmpty) return nombre;
-    return '$nombre ($abreviatura)';
-  }
-}
-
-class _AlmacenOption {
-  final String id;
-  final String nombre;
-  final bool activo;
-
-  const _AlmacenOption({
-    required this.id,
-    required this.nombre,
-    required this.activo,
-  });
-
-  String get label => nombre.trim().isEmpty ? id : nombre.trim();
-}
+// UnidadOption and AlmacenOption data classes are used from the shared data files.
 
 /// ===========================
 /// Loading / Empty / Error UI
@@ -1047,7 +878,7 @@ class _LoadingTable extends StatelessWidget {
       decoration: BoxDecoration(
         color: Palette.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Palette.button.withOpacity(0.25)),
+        border: Border.all(color: Palette.button.withValues(alpha: 0.25)),
       ),
       child: Center(
         child: Padding(
@@ -1055,7 +886,7 @@ class _LoadingTable extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 42, color: Palette.primary.withOpacity(0.85)),
+              Icon(icon, size: 42, color: Palette.primary.withValues(alpha: 0.85)),
               const SizedBox(height: 10),
               const CircularProgressIndicator(),
             ],
@@ -1086,19 +917,22 @@ class _EmptyBox extends StatelessWidget {
         decoration: BoxDecoration(
           color: Palette.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Palette.button.withOpacity(0.35)),
+          border: Border.all(color: Palette.button.withValues(alpha: 0.35)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 44, color: Palette.primary.withOpacity(0.85)),
+            Icon(icon, size: 44, color: Palette.primary.withValues(alpha: 0.85)),
             const SizedBox(height: 10),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+            ),
             const SizedBox(height: 6),
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Palette.ink.withOpacity(0.75)),
+              style: TextStyle(color: Palette.ink.withValues(alpha: 0.75)),
             ),
           ],
         ),
@@ -1120,13 +954,18 @@ class _ErrorBox extends StatelessWidget {
         decoration: BoxDecoration(
           color: Palette.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Palette.statsDanger.withOpacity(0.35)),
+          border: Border.all(color: Palette.statsDanger.withValues(alpha: 0.35)),
         ),
         child: Row(
           children: [
-            Icon(Icons.error_outline_rounded, color: Palette.statsDanger.withOpacity(0.9)),
+            Icon(
+              Icons.error_outline_rounded,
+              color: Palette.statsDanger.withValues(alpha: 0.9),
+            ),
             const SizedBox(width: 12),
-            Expanded(child: Text(message, style: const TextStyle(color: Palette.ink))),
+            Expanded(
+              child: Text(message, style: const TextStyle(color: Palette.ink)),
+            ),
           ],
         ),
       ),
@@ -1139,9 +978,8 @@ class _ErrorBox extends StatelessWidget {
 /// ===========================
 class _ProductoDialog extends StatefulWidget {
   final String title;
-  final List<_UnidadOption> unidades;
-  final List<_AlmacenOption> almacenes;
-  final FirebaseStorage storage;
+  final List<UnidadOption> unidades;
+  final List<AlmacenOption> almacenes;
 
   final String? initialCodigo;
   final String? initialNombre;
@@ -1162,7 +1000,7 @@ class _ProductoDialog extends StatefulWidget {
     required this.title,
     required this.unidades,
     required this.almacenes,
-    required this.storage,
+
     this.initialCodigo,
     this.initialNombre,
     this.initialDescripcion,
@@ -1220,7 +1058,9 @@ class _ProductoDialogState extends State<_ProductoDialog> {
 
     final initA = widget.initialAlmacenId?.trim();
     final existsInit =
-        initA != null && initA.isNotEmpty && widget.almacenes.any((a) => a.id == initA);
+        initA != null &&
+        initA.isNotEmpty &&
+        widget.almacenes.any((a) => a.id == initA);
 
     if (existsInit) {
       _almacenId = initA;
@@ -1257,7 +1097,10 @@ class _ProductoDialogState extends State<_ProductoDialog> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error abriendo selector: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Error abriendo selector: $e'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -1267,10 +1110,7 @@ class _ProductoDialogState extends State<_ProductoDialog> {
   }
 
   Future<String> _resolveExistingUrl() async {
-    final path = (widget.initialImagenPath ?? '').trim();
-    if (path.isNotEmpty) {
-      return await widget.storage.ref().child(path).getDownloadURL();
-    }
+    // UI does not access storage directly; controllers provide final URLs.
     return (widget.initialImagenUrl ?? '').trim();
   }
 
@@ -1294,7 +1134,7 @@ class _ProductoDialogState extends State<_ProductoDialog> {
 
     Navigator.pop(
       context,
-      _ProductoFormResult(
+      ProductoFormResult(
         codigo: _codigoCtrl.text,
         nombre: _nombreCtrl.text,
         descripcion: _descCtrl.text,
@@ -1345,17 +1185,25 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                     DropdownButtonFormField<String>(
                       value: _almacenId,
                       items: widget.almacenes
-                          .map((a) => DropdownMenuItem(value: a.id, child: Text(a.label)))
+                          .map(
+                            (a) => DropdownMenuItem(
+                              value: a.id,
+                              child: Text(a.label),
+                            ),
+                          )
                           .toList(),
                       onChanged: (v) => setState(() => _almacenId = v),
                       decoration: InputDecoration(
                         labelText: 'Almacén',
                         filled: true,
                         fillColor: Palette.fieldBg,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'Selecciona un almacén';
+                        if (v == null || v.isEmpty)
+                          return 'Selecciona un almacén';
                         return null;
                       },
                     ),
@@ -1370,7 +1218,9 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                               labelText: 'Código (opcional)',
                               filled: true,
                               fillColor: Palette.fieldBg,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
                           ),
                         ),
@@ -1379,15 +1229,24 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                           child: DropdownButtonFormField<String>(
                             value: _tipoItem,
                             items: const [
-                              DropdownMenuItem(value: 'PRODUCTO', child: Text('PRODUCTO')),
-                              DropdownMenuItem(value: 'INSUMO', child: Text('INSUMO')),
+                              DropdownMenuItem(
+                                value: 'PRODUCTO',
+                                child: Text('PRODUCTO'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'INSUMO',
+                                child: Text('INSUMO'),
+                              ),
                             ],
-                            onChanged: (v) => setState(() => _tipoItem = v ?? _tipoItem),
+                            onChanged: (v) =>
+                                setState(() => _tipoItem = v ?? _tipoItem),
                             decoration: InputDecoration(
                               labelText: 'Tipo',
                               filled: true,
                               fillColor: Palette.fieldBg,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
                           ),
                         ),
@@ -1401,10 +1260,13 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                         labelText: 'Nombre',
                         filled: true,
                         fillColor: Palette.fieldBg,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                       validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Ingresa un nombre';
+                        if (v == null || v.trim().isEmpty)
+                          return 'Ingresa un nombre';
                         if (v.trim().length < 2) return 'Mínimo 2 caracteres';
                         return null;
                       },
@@ -1418,17 +1280,25 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                           child: DropdownButtonFormField<String>(
                             value: _unidadId,
                             items: widget.unidades
-                                .map((u) => DropdownMenuItem(value: u.id, child: Text(u.label)))
+                                .map(
+                                  (u) => DropdownMenuItem(
+                                    value: u.id,
+                                    child: Text(u.label),
+                                  ),
+                                )
                                 .toList(),
                             onChanged: (v) => setState(() => _unidadId = v),
                             decoration: InputDecoration(
                               labelText: 'Unidad',
                               filled: true,
                               fillColor: Palette.fieldBg,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
                             validator: (v) {
-                              if (v == null || v.isEmpty) return 'Selecciona una unidad';
+                              if (v == null || v.isEmpty)
+                                return 'Selecciona una unidad';
                               return null;
                             },
                           ),
@@ -1443,7 +1313,9 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                               labelText: 'Stock',
                               filled: true,
                               fillColor: Palette.fieldBg,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
                             validator: (v) {
                               final n = int.tryParse((v ?? '').trim());
@@ -1463,7 +1335,9 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                               labelText: 'Precio',
                               filled: true,
                               fillColor: Palette.fieldBg,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
                             validator: (v) {
                               final p = _parsePrecio(v ?? '');
@@ -1484,7 +1358,9 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                         labelText: 'Descripción (opcional)',
                         filled: true,
                         fillColor: Palette.fieldBg,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                     ),
 
@@ -1497,14 +1373,19 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                       decoration: BoxDecoration(
                         color: Palette.card,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Palette.button.withOpacity(0.35)),
+                        border: Border.all(
+                          color: Palette.button.withValues(alpha: 0.35),
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
                             'Imagen (opcional)',
-                            style: TextStyle(fontWeight: FontWeight.w900, color: Palette.ink),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              color: Palette.ink,
+                            ),
                           ),
                           const SizedBox(height: 10),
                           ClipRRect(
@@ -1512,7 +1393,10 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                             child: AspectRatio(
                               aspectRatio: 16 / 9,
                               child: _pickedBytes != null
-                                  ? Image.memory(_pickedBytes!, fit: BoxFit.cover)
+                                  ? Image.memory(
+                                      _pickedBytes!,
+                                      fit: BoxFit.cover,
+                                    )
                                   : FutureBuilder<String>(
                                       future: _resolveExistingUrl(),
                                       builder: (context, snap) {
@@ -1520,7 +1404,11 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                                           return Center(
                                             child: Text(
                                               'Sin imagen',
-                                              style: TextStyle(color: Palette.ink.withOpacity(0.7)),
+                                              style: TextStyle(
+                                                color: Palette.ink.withValues(alpha: 
+                                                  0.7,
+                                                ),
+                                              ),
                                             ),
                                           );
                                         }
@@ -1529,7 +1417,11 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                                           return Center(
                                             child: Text(
                                               'Sin imagen',
-                                              style: TextStyle(color: Palette.ink.withOpacity(0.7)),
+                                              style: TextStyle(
+                                                color: Palette.ink.withValues(alpha: 
+                                                  0.7,
+                                                ),
+                                              ),
                                             ),
                                           );
                                         }
@@ -1539,13 +1431,22 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                                           errorBuilder: (_, __, ___) => Center(
                                             child: Text(
                                               'No se pudo cargar',
-                                              style: TextStyle(color: Palette.ink.withOpacity(0.75)),
+                                              style: TextStyle(
+                                                color: Palette.ink.withValues(alpha: 
+                                                  0.75,
+                                                ),
+                                              ),
                                             ),
                                           ),
-                                          loadingBuilder: (context, child, progress) {
-                                            if (progress == null) return child;
-                                            return const Center(child: CircularProgressIndicator());
-                                          },
+                                          loadingBuilder:
+                                              (context, child, progress) {
+                                                if (progress == null)
+                                                  return child;
+                                                return const Center(
+                                                  child:
+                                                      CircularProgressIndicator(),
+                                                );
+                                              },
                                         );
                                       },
                                     ),
@@ -1562,7 +1463,9 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                                   backgroundColor: Palette.button,
                                   foregroundColor: Palette.white,
                                   elevation: 0,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 10),
@@ -1572,8 +1475,12 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                                 label: const Text('Quitar'),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: Palette.ink,
-                                  side: BorderSide(color: Palette.button.withOpacity(0.55)),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  side: BorderSide(
+                                    color: Palette.button.withValues(alpha: 0.55),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
                                 ),
                               ),
                             ],
@@ -1594,11 +1501,18 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                       onPressed: _saving ? null : () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Palette.ink,
-                        side: BorderSide(color: Palette.button.withOpacity(0.55)),
+                        side: BorderSide(
+                          color: Palette.button.withValues(alpha: 0.55),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
-                      child: const Text('Cancelar', style: TextStyle(fontWeight: FontWeight.w800)),
+                      child: const Text(
+                        'Cancelar',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1610,7 +1524,9 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                         foregroundColor: Palette.white,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                       child: _saving
                           ? const SizedBox(
@@ -1618,7 +1534,10 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                               width: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('Guardar', style: TextStyle(fontWeight: FontWeight.w900)),
+                          : const Text(
+                              'Guardar',
+                              style: TextStyle(fontWeight: FontWeight.w900),
+                            ),
                     ),
                   ),
                 ],
@@ -1629,38 +1548,4 @@ class _ProductoDialogState extends State<_ProductoDialog> {
       ),
     );
   }
-}
-
-class _ProductoFormResult {
-  final String codigo;
-  final String nombre;
-  final String descripcion;
-  final String tipoItem;
-  final String unidadId;
-  final String unidadNombre;
-  final double precio;
-
-  // ✅ NUEVO: stock entero
-  final int stock;
-
-  final Uint8List? imageBytes;
-  final String? imageName;
-
-  final String almacenId;
-  final String almacenNombre;
-
-  _ProductoFormResult({
-    required this.codigo,
-    required this.nombre,
-    required this.descripcion,
-    required this.tipoItem,
-    required this.unidadId,
-    required this.unidadNombre,
-    required this.precio,
-    required this.stock,
-    this.imageBytes,
-    this.imageName,
-    required this.almacenId,
-    required this.almacenNombre,
-  });
 }

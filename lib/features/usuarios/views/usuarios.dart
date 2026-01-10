@@ -1,5 +1,3 @@
-// lib/features/admin/usuarios/usuarios_page.dart
-//
 // ✅ Usuarios (Firestore) — más bonito + más animado (sin parpadeos feos)
 // ✅ Sin selección múltiple
 // ✅ Rol editable por usuario con ComboBox a la derecha
@@ -27,6 +25,12 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:quimisol_web/core/theme/palette.dart';
 
+import '../controllers/usuarios_controller.dart';
+import '../data/almacen_row.dart';
+
+import 'widgets/role_combo.dart';
+import 'widgets/users_states.dart';
+
 class UsuariosPage extends StatefulWidget {
   const UsuariosPage({super.key});
 
@@ -36,9 +40,7 @@ class UsuariosPage extends StatefulWidget {
 
 class _UsuariosPageState extends State<UsuariosPage>
     with TickerProviderStateMixin {
-  final _searchCtrl = TextEditingController();
-  String _q = '';
-  String _roleFilter = 'Todos'; // Todos | admin | cliente | repartidor
+  final controller = UsuariosController();
 
   late final AnimationController _bgCtrl;
 
@@ -51,40 +53,20 @@ class _UsuariosPageState extends State<UsuariosPage>
       duration: const Duration(milliseconds: 2600),
     )..repeat(reverse: true);
 
-    _searchCtrl.addListener(() {
-      final v = _searchCtrl.text.trim();
-      if (v == _q) return;
-      setState(() => _q = v);
-    });
+    // Rebuild UI when search text changes
+    controller.searchCtrl.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _bgCtrl.dispose();
-    _searchCtrl.dispose();
+    controller.dispose();
     super.dispose();
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> _usersStream() {
-    return FirebaseFirestore.instance
-        .collection('usuarios')
-        .orderBy('created_at', descending: true)
-        .snapshots();
-  }
-
-  bool _matches(Map<String, dynamic> u) {
-    final name = (u['name'] ?? '').toString().toLowerCase();
-    final email = (u['email'] ?? '').toString().toLowerCase();
-    final role = (u['role'] ?? '').toString().toLowerCase();
-
-    final okRole = (_roleFilter == 'Todos') ? true : role == _roleFilter;
-    if (!okRole) return false;
-
-    if (_q.isEmpty) return true;
-    final q = _q.toLowerCase();
-    return name.contains(q) || email.contains(q) || role.contains(q);
-  }
-
+  // streams y filtros en controller
+  Stream<QuerySnapshot<Map<String, dynamic>>> _usersStream() =>
+      controller.usersStream();
   @override
   Widget build(BuildContext context) {
     final ink = Palette.ink;
@@ -97,9 +79,9 @@ class _UsuariosPageState extends State<UsuariosPage>
         children: [
           _AnimatedHeader(
             bgCtrl: _bgCtrl,
-            searchCtrl: _searchCtrl,
-            roleFilter: _roleFilter,
-            onRoleFilter: (v) => setState(() => _roleFilter = v),
+            searchCtrl: controller.searchCtrl,
+            roleFilter: controller.roleFilter,
+            onRoleFilter: (v) => setState(() => controller.roleFilter = v),
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -114,11 +96,15 @@ class _UsuariosPageState extends State<UsuariosPage>
                   );
                 }
                 if (snap.connectionState == ConnectionState.waiting) {
-                  return const _LoadingFancy();
+                  return const LoadingFancy();
                 }
 
                 final docs = snap.data?.docs ?? [];
-                final filtered = docs.where((d) => _matches(d.data())).toList();
+                final users = controller.buildUsers(
+                  docs,
+                  controller.searchCtrl.text.trim(),
+                  controller.roleFilter,
+                );
 
                 return Column(
                   children: [
@@ -129,7 +115,7 @@ class _UsuariosPageState extends State<UsuariosPage>
                           Text(
                             'Resultados',
                             style: TextStyle(
-                              color: ink.withOpacity(0.55),
+                              color: ink.withValues(alpha: .55),
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -141,7 +127,7 @@ class _UsuariosPageState extends State<UsuariosPage>
                               child: ScaleTransition(scale: a, child: c),
                             ),
                             child: Container(
-                              key: ValueKey(filtered.length),
+                              key: ValueKey(users.length),
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 10,
                                 vertical: 6,
@@ -150,11 +136,11 @@ class _UsuariosPageState extends State<UsuariosPage>
                                 color: Palette.white,
                                 borderRadius: BorderRadius.circular(999),
                                 border: Border.all(
-                                  color: ink.withOpacity(0.06),
+                                  color: ink.withValues(alpha: .06),
                                 ),
                               ),
                               child: Text(
-                                '${filtered.length}',
+                                '${users.length}',
                                 style: TextStyle(
                                   color: ink,
                                   fontWeight: FontWeight.w900,
@@ -171,26 +157,16 @@ class _UsuariosPageState extends State<UsuariosPage>
                       ),
                     ),
                     Expanded(
-                      child: filtered.isEmpty
-                          ? _EmptyState(query: _q, role: _roleFilter)
+                      child: users.isEmpty
+                          ? EmptyState(
+                              query: controller.searchCtrl.text.trim(),
+                              role: controller.roleFilter,
+                            )
                           : ListView.builder(
                               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                              itemCount: filtered.length,
+                              itemCount: users.length,
                               itemBuilder: (_, i) {
-                                final d = filtered[i];
-                                final u = d.data();
-
-                                final name = (u['name'] ?? 'Usuario')
-                                    .toString();
-                                final email = (u['email'] ?? '').toString();
-                                final photo = (u['photo'] ?? '').toString();
-                                final role = (u['role'] ?? 'cliente')
-                                    .toString()
-                                    .toLowerCase();
-
-                                // ✅ NUEVO: almacenId guardado en usuarios (para UI)
-                                final almacenId = (u['almacenId'] ?? '')
-                                    .toString();
+                                final u = users[i];
 
                                 final delay = math.min(380, i * 22);
 
@@ -199,12 +175,13 @@ class _UsuariosPageState extends State<UsuariosPage>
                                   child: Padding(
                                     padding: const EdgeInsets.only(bottom: 12),
                                     child: _UserCardFancy(
-                                      uid: d.id,
-                                      name: name,
-                                      email: email,
-                                      photoRaw: photo,
-                                      role: role,
-                                      almacenId: almacenId,
+                                      controller: controller,
+                                      uid: u.uid,
+                                      name: u.name,
+                                      email: u.email,
+                                      photoRaw: u.photo,
+                                      role: u.role,
+                                      almacenId: u.almacenId,
                                     ),
                                   ),
                                 );
@@ -286,10 +263,10 @@ class _AnimatedHeader extends StatelessWidget {
                       height: 42,
                       width: 42,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.18),
+                        color: Colors.white.withValues(alpha: .18),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.18),
+                          color: Colors.white.withValues(alpha: .18),
                         ),
                       ),
                       child: const Icon(
@@ -332,10 +309,10 @@ class _AnimatedHeader extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Palette.white,
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: ink.withOpacity(0.06)),
+                    border: Border.all(color: ink.withValues(alpha: .06)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: Colors.black.withValues(alpha: .08),
                         blurRadius: 20,
                         offset: const Offset(0, 12),
                       ),
@@ -344,7 +321,10 @@ class _AnimatedHeader extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Row(
                     children: [
-                      Icon(Icons.search_rounded, color: ink.withOpacity(0.45)),
+                      Icon(
+                        Icons.search_rounded,
+                        color: ink.withValues(alpha: .45),
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: TextField(
@@ -353,7 +333,7 @@ class _AnimatedHeader extends StatelessWidget {
                             hintText: 'Buscar por nombre, email o rol…',
                             border: InputBorder.none,
                             hintStyle: TextStyle(
-                              color: ink.withOpacity(0.35),
+                              color: ink.withValues(alpha: .35),
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -384,7 +364,7 @@ class _AnimatedHeader extends StatelessWidget {
                                       padding: const EdgeInsets.all(6),
                                       child: Icon(
                                         Icons.close_rounded,
-                                        color: ink.withOpacity(0.55),
+                                        color: ink.withValues(alpha: .55),
                                       ),
                                     ),
                                   ),
@@ -416,9 +396,9 @@ class _RoleFilterMini extends StatelessWidget {
       height: 42,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.18),
+        color: Colors.white.withValues(alpha: .18),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.18)),
+        border: Border.all(color: Colors.white.withValues(alpha: .18)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
@@ -481,6 +461,7 @@ class _RoleFilterMini extends StatelessWidget {
 
 class _UserCardFancy extends StatelessWidget {
   const _UserCardFancy({
+    required this.controller,
     required this.uid,
     required this.name,
     required this.email,
@@ -488,6 +469,8 @@ class _UserCardFancy extends StatelessWidget {
     required this.role,
     required this.almacenId,
   });
+
+  final UsuariosController controller;
 
   final String uid;
   final String name;
@@ -531,10 +514,10 @@ class _UserCardFancy extends StatelessWidget {
       decoration: BoxDecoration(
         color: Palette.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: ink.withOpacity(0.06)),
+        border: Border.all(color: ink.withValues(alpha: .06)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: .04),
             blurRadius: 18,
             offset: const Offset(0, 12),
           ),
@@ -566,7 +549,7 @@ class _UserCardFancy extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: ink.withOpacity(0.55),
+                    color: ink.withValues(alpha: .55),
                     fontWeight: FontWeight.w700,
                     fontSize: 12.5,
                   ),
@@ -578,9 +561,9 @@ class _UserCardFancy extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: roleColor.withOpacity(0.10),
+                    color: roleColor.withValues(alpha: .10),
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: roleColor.withOpacity(0.22)),
+                    border: Border.all(color: roleColor.withValues(alpha: .22)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -590,7 +573,7 @@ class _UserCardFancy extends StatelessWidget {
                       Text(
                         role,
                         style: TextStyle(
-                          color: Palette.ink.withOpacity(0.75),
+                          color: Palette.ink.withValues(alpha: .75),
                           fontWeight: FontWeight.w900,
                           fontSize: 12,
                         ),
@@ -608,11 +591,15 @@ class _UserCardFancy extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _RoleComboFancy(uid: uid, currentRole: role),
+              RoleComboFancy(controller: controller, uid: uid, currentRole: role),
 
               if (role == 'repartidor') ...[
                 const SizedBox(width: 10),
-                _AlmacenComboFancy(uid: uid, currentAlmacenId: almacenId),
+                _AlmacenComboFancy(
+                  controller: controller,
+                  uid: uid,
+                  currentAlmacenId: almacenId,
+                ),
               ],
             ],
           ),
@@ -625,8 +612,13 @@ class _UserCardFancy extends StatelessWidget {
 /* ---------------- ALMACEN PICKER (AGRUPADO POR DEPARTAMENTO) ---------------- */
 
 class _AlmacenComboFancy extends StatefulWidget {
-  const _AlmacenComboFancy({required this.uid, required this.currentAlmacenId});
+  const _AlmacenComboFancy({
+    required this.controller,
+    required this.uid,
+    required this.currentAlmacenId,
+  });
 
+  final UsuariosController controller;
   final String uid;
   final String currentAlmacenId;
 
@@ -638,12 +630,8 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
   bool _saving = false;
   bool _saved = false;
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> _almacenesStream() {
-    return FirebaseFirestore.instance
-        .collection('almacenes')
-        .where('activo', isEqualTo: true)
-        .snapshots();
-  }
+  Stream<QuerySnapshot<Map<String, dynamic>>> _almacenesStream() =>
+      widget.controller.almacenesStream();
 
   Future<void> _setAlmacen(String almacenId) async {
     if (_saving) return;
@@ -653,28 +641,10 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
       _saved = false;
     });
 
-    final db = FirebaseFirestore.instance;
     final uid = widget.uid;
 
     try {
-      final userRef = db.collection('usuarios').doc(uid);
-      final repRef = db.collection('repartidores').doc(uid);
-
-      final batch = db.batch();
-
-      // ✅ Guarda SOLO UID del almacén
-      batch.set(repRef, {
-        'almacenId': almacenId,
-        'updated_at': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      // ✅ (para la UI) también en usuarios
-      batch.set(userRef, {
-        'almacenId': almacenId,
-        'updated_at': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      await batch.commit();
+      await widget.controller.setAlmacen(uid: uid, almacenId: almacenId);
 
       if (!mounted) return;
       setState(() => _saved = true);
@@ -693,13 +663,13 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
   }
 
   Future<void> _openPicker({
-    required List<_AlmacenRow> almacenes,
+    required List<AlmacenRow> almacenes,
     required String? selectedId,
   }) async {
     final ink = Palette.ink;
 
     // ✅ Agrupar por departamento
-    final Map<String, List<_AlmacenRow>> grouped = {};
+    final Map<String, List<AlmacenRow>> grouped = {};
     for (final a in almacenes) {
       final dep = (a.departamento.trim().isEmpty)
           ? 'Sin departamento'
@@ -728,10 +698,10 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
           decoration: BoxDecoration(
             color: Palette.white,
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: ink.withOpacity(0.08)),
+            border: Border.all(color: ink.withValues(alpha: .08)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.14),
+                color: Colors.black.withValues(alpha: .14),
                 blurRadius: 24,
                 offset: const Offset(0, 12),
               ),
@@ -752,12 +722,12 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
                         color: Palette.card,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: Palette.primary.withOpacity(0.14),
+                          color: Palette.primary.withValues(alpha: .14),
                         ),
                       ),
                       child: Icon(
                         Icons.warehouse_rounded,
-                        color: Palette.primary.withOpacity(0.9),
+                        color: Palette.primary.withValues(alpha: .9),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -775,7 +745,7 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
                       onPressed: () => Navigator.pop(context),
                       icon: Icon(
                         Icons.close_rounded,
-                        color: ink.withOpacity(0.65),
+                        color: ink.withValues(alpha: .65),
                       ),
                       splashRadius: 22,
                     ),
@@ -810,13 +780,13 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
                                 color: Palette.card,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: Palette.primary.withOpacity(0.10),
+                                  color: Palette.primary.withValues(alpha: .10),
                                 ),
                               ),
                               child: Text(
                                 dep,
                                 style: TextStyle(
-                                  color: ink.withOpacity(0.9),
+                                  color: ink.withValues(alpha: .9),
                                   fontWeight: FontWeight.w900,
                                 ),
                               ),
@@ -830,7 +800,7 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
                                 padding: const EdgeInsets.only(bottom: 8),
                                 child: Material(
                                   color: sel
-                                      ? Palette.button.withOpacity(0.32)
+                                      ? Palette.button.withValues(alpha: .32)
                                       : Palette.fieldBg,
                                   borderRadius: BorderRadius.circular(16),
                                   child: InkWell(
@@ -851,7 +821,7 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
                                                 : Icons.store_rounded,
                                             color: sel
                                                 ? Palette.primary
-                                                : ink.withOpacity(0.55),
+                                                : ink.withValues(alpha: .55),
                                             size: 20,
                                           ),
                                           const SizedBox(width: 10),
@@ -869,8 +839,9 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
                                           if (sel)
                                             Icon(
                                               Icons.verified_rounded,
-                                              color: Palette.primary
-                                                  .withOpacity(0.9),
+                                              color: Palette.primary.withValues(
+                                                alpha: .9,
+                                              ),
                                               size: 18,
                                             ),
                                         ],
@@ -910,7 +881,7 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
         // ✅ id, nombre, departamento
         final almacenes = docs.map((d) {
           final data = d.data();
-          return _AlmacenRow(
+          return AlmacenRow(
             id: d.id,
             nombre: (data['nombre'] ?? '—').toString(),
             departamento: (data['departamento'] ?? '').toString(),
@@ -924,7 +895,7 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
             decoration: BoxDecoration(
               color: Palette.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: ink.withOpacity(0.08)),
+              border: Border.all(color: ink.withValues(alpha: .08)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -932,13 +903,13 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
                 Icon(
                   Icons.warehouse_rounded,
                   size: 18,
-                  color: ink.withOpacity(0.55),
+                  color: ink.withValues(alpha: .55),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   'Sin almacenes',
                   style: TextStyle(
-                    color: ink.withOpacity(0.65),
+                    color: ink.withValues(alpha: .65),
                     fontWeight: FontWeight.w900,
                     fontSize: 12.5,
                   ),
@@ -964,7 +935,7 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
           decoration: BoxDecoration(
             color: Palette.card,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Palette.primary.withOpacity(0.18)),
+            border: Border.all(color: Palette.primary.withValues(alpha: .18)),
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
@@ -1022,7 +993,7 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
                 const SizedBox(width: 6),
                 Icon(
                   Icons.keyboard_arrow_down_rounded,
-                  color: ink.withOpacity(0.60),
+                  color: ink.withValues(alpha: .60),
                 ),
               ],
             ),
@@ -1031,18 +1002,6 @@ class _AlmacenComboFancyState extends State<_AlmacenComboFancy> {
       },
     );
   }
-}
-
-class _AlmacenRow {
-  final String id;
-  final String nombre;
-  final String departamento;
-
-  const _AlmacenRow({
-    required this.id,
-    required this.nombre,
-    required this.departamento,
-  });
 }
 
 /* ---------------- AVATAR RESOLVER ---------------- */
@@ -1135,8 +1094,6 @@ class _AvatarResolvedState extends State<_AvatarResolved> {
 
   @override
   Widget build(BuildContext context) {
-    final ink = Palette.ink;
-
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -1146,7 +1103,10 @@ class _AvatarResolvedState extends State<_AvatarResolved> {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: RadialGradient(
-              colors: [Palette.button.withOpacity(0.20), Colors.transparent],
+              colors: [
+                Palette.button.withValues(alpha: .20),
+                Colors.transparent,
+              ],
             ),
           ),
         ),
@@ -1157,7 +1117,7 @@ class _AvatarResolvedState extends State<_AvatarResolved> {
             shape: BoxShape.circle,
             color: Palette.white,
             border: Border.all(
-              color: Palette.button.withOpacity(0.35),
+              color: Palette.button.withValues(alpha: .35),
               width: 1.2,
             ),
           ),
@@ -1169,7 +1129,7 @@ class _AvatarResolvedState extends State<_AvatarResolved> {
                       width: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Palette.primary.withOpacity(0.75),
+                        color: Palette.primary.withValues(alpha: .75),
                       ),
                     ),
                   )
@@ -1203,200 +1163,12 @@ class _RetryAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final ink = Palette.ink;
     return Container(
-      color: ink.withOpacity(0.06),
+      color: ink.withValues(alpha: .06),
       child: Center(
         child: Icon(
           Icons.person_rounded,
-          color: Palette.primary.withOpacity(0.75),
+          color: Palette.primary.withValues(alpha: .75),
         ),
-      ),
-    );
-  }
-}
-
-/* ---------------- ROLE COMBO CON MICRO-ANIM ---------------- */
-
-class _RoleComboFancy extends StatefulWidget {
-  const _RoleComboFancy({required this.uid, required this.currentRole});
-  final String uid;
-  final String currentRole;
-
-  @override
-  State<_RoleComboFancy> createState() => _RoleComboFancyState();
-}
-
-class _RoleComboFancyState extends State<_RoleComboFancy> {
-  bool _saving = false;
-  bool _saved = false;
-
-  Future<void> _setRole(String role) async {
-    if (_saving) return;
-
-    setState(() {
-      _saving = true;
-      _saved = false;
-    });
-
-    final db = FirebaseFirestore.instance;
-    final uid = widget.uid;
-
-    try {
-      final userRef = db.collection('usuarios').doc(uid);
-
-      final adminRef = db.collection('admins').doc(uid);
-      final clienteRef = db.collection('clientes').doc(uid);
-      final repartidorRef = db.collection('repartidores').doc(uid);
-
-      final userSnap = await userRef.get();
-      final userData = userSnap.data() ?? {};
-
-      final rolePayload = <String, dynamic>{
-        'uid': uid,
-        'role': role,
-        'name': (userData['name'] ?? '').toString(),
-        'email': (userData['email'] ?? '').toString(),
-        'photo': (userData['photo'] ?? '').toString(),
-        'updated_at': FieldValue.serverTimestamp(),
-        'from': 'usuarios',
-      };
-
-      final batch = db.batch();
-
-      // 1) Actualiza rol en usuarios
-      final userUpdate = <String, dynamic>{
-        'role': role,
-        'updated_at': FieldValue.serverTimestamp(),
-      };
-
-      // ✅ Si deja de ser repartidor, limpiamos almacenId en usuarios
-      if (role != 'repartidor') {
-        userUpdate['almacenId'] = FieldValue.delete();
-      }
-
-      batch.set(userRef, userUpdate, SetOptions(merge: true));
-
-      // 2) Limpia todas las colecciones de roles
-      batch.delete(adminRef);
-      batch.delete(clienteRef);
-      batch.delete(repartidorRef);
-
-      // 3) Set en la colección correspondiente al rol
-      if (role == 'admin') {
-        batch.set(adminRef, rolePayload, SetOptions(merge: true));
-      } else if (role == 'cliente') {
-        batch.set(clienteRef, rolePayload, SetOptions(merge: true));
-      } else if (role == 'repartidor') {
-        // ✅ si ya tiene almacenId guardado en usuarios, lo replicamos
-        final almacenId = (userData['almacenId'] ?? '').toString();
-        if (almacenId.isNotEmpty) {
-          rolePayload['almacenId'] = almacenId; // SOLO uid del almacén
-        }
-        batch.set(repartidorRef, rolePayload, SetOptions(merge: true));
-      }
-
-      await batch.commit();
-
-      if (!mounted) return;
-      setState(() => _saved = true);
-
-      await Future.delayed(const Duration(milliseconds: 750));
-      if (mounted) setState(() => _saved = false);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo actualizar rol: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  Color _colorFor(String r) {
-    switch (r) {
-      case 'admin':
-        return Palette.primary;
-      case 'repartidor':
-        return Palette.statsSuccess;
-      case 'cliente':
-      default:
-        return Palette.button;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ink = Palette.ink;
-    final c = _colorFor(widget.currentRole);
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: c.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.withOpacity(0.28)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            transitionBuilder: (child, anim) => FadeTransition(
-              opacity: anim,
-              child: ScaleTransition(scale: anim, child: child),
-            ),
-            child: _saving
-                ? SizedBox(
-                    key: const ValueKey('loading'),
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: c),
-                  )
-                : _saved
-                ? Icon(
-                    Icons.check_circle_rounded,
-                    key: const ValueKey('saved'),
-                    color: c,
-                    size: 18,
-                  )
-                : Icon(
-                    Icons.tune_rounded,
-                    key: const ValueKey('idle'),
-                    color: c,
-                    size: 18,
-                  ),
-          ),
-          const SizedBox(width: 8),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: widget.currentRole,
-              dropdownColor: Palette.white,
-              borderRadius: BorderRadius.circular(14),
-              icon: Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: ink.withOpacity(0.55),
-              ),
-              style: TextStyle(
-                color: ink,
-                fontWeight: FontWeight.w900,
-                fontSize: 12.5,
-              ),
-              onChanged: _saving
-                  ? null
-                  : (v) => _setRole(v ?? widget.currentRole),
-              items: const [
-                DropdownMenuItem(value: 'admin', child: Text('Admin')),
-                DropdownMenuItem(value: 'cliente', child: Text('Cliente')),
-                DropdownMenuItem(
-                  value: 'repartidor',
-                  child: Text('Repartidor'),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1452,91 +1224,6 @@ class _StaggerInState extends State<_StaggerIn>
   }
 }
 
-/* ---------------- STATES ---------------- */
-
-class _LoadingFancy extends StatelessWidget {
-  const _LoadingFancy();
-
-  @override
-  Widget build(BuildContext context) {
-    final ink = Palette.ink;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(
-            height: 34,
-            width: 34,
-            child: CircularProgressIndicator(strokeWidth: 3),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Cargando usuarios…',
-            style: TextStyle(
-              color: ink.withOpacity(0.6),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.query, required this.role});
-  final String query;
-  final String role;
-
-  @override
-  Widget build(BuildContext context) {
-    final ink = Palette.ink;
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Palette.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: ink.withOpacity(0.06)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.search_off_rounded,
-                size: 44,
-                color: ink.withOpacity(0.35),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Sin resultados',
-                style: TextStyle(
-                  color: ink,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Filtro: $role${query.isEmpty ? '' : ' • "$query"'}',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: ink.withOpacity(0.55),
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _HintPill extends StatelessWidget {
   const _HintPill({required this.text});
   final String text;
@@ -1549,12 +1236,12 @@ class _HintPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: Palette.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: ink.withOpacity(0.06)),
+        border: Border.all(color: ink.withValues(alpha: .06)),
       ),
       child: Text(
         text,
         style: TextStyle(
-          color: ink.withOpacity(0.55),
+          color: ink.withValues(alpha: .55),
           fontWeight: FontWeight.w800,
           fontSize: 11.5,
         ),

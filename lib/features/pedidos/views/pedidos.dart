@@ -19,7 +19,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:quimisol_web/core/theme/palette.dart';
 
-import 'package:quimisol_web/features/pedidos/pages/detalle_pedido.dart';
+import 'package:quimisol_web/features/pedidos/views/detalle_pedido.dart';
 
 class PedidosPage extends StatefulWidget {
   const PedidosPage({super.key});
@@ -159,7 +159,7 @@ class _PedidosPageState extends State<PedidosPage>
                           Text(
                             'Resultados',
                             style: TextStyle(
-                              color: ink.withOpacity(0.55),
+                              color: ink.withValues(alpha: 0.55),
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -290,10 +290,10 @@ class _PedidosHeader extends StatelessWidget {
                       height: 42,
                       width: 42,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.18),
+                        color: Colors.white.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.18),
+                          color: Colors.white.withValues(alpha: 0.18),
                         ),
                       ),
                       child: const Icon(
@@ -336,10 +336,10 @@ class _PedidosHeader extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Palette.white,
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: ink.withOpacity(0.06)),
+                    border: Border.all(color: ink.withValues(alpha: 0.06)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: Colors.black.withValues(alpha: 0.08),
                         blurRadius: 20,
                         offset: const Offset(0, 12),
                       ),
@@ -348,7 +348,7 @@ class _PedidosHeader extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Row(
                     children: [
-                      Icon(Icons.search_rounded, color: ink.withOpacity(0.45)),
+                      Icon(Icons.search_rounded, color: ink.withValues(alpha: 0.45)),
                       const SizedBox(width: 10),
                       Expanded(
                         child: TextField(
@@ -358,7 +358,7 @@ class _PedidosHeader extends StatelessWidget {
                                 'Buscar por código, dirección, uid o depto…',
                             border: InputBorder.none,
                             hintStyle: TextStyle(
-                              color: ink.withOpacity(0.35),
+                              color: ink.withValues(alpha: 0.35),
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -389,7 +389,7 @@ class _PedidosHeader extends StatelessWidget {
                                       padding: const EdgeInsets.all(6),
                                       child: Icon(
                                         Icons.close_rounded,
-                                        color: ink.withOpacity(0.55),
+                                        color: ink.withValues(alpha: 0.55),
                                       ),
                                     ),
                                   ),
@@ -447,9 +447,9 @@ class _EstadoFilterMini extends StatelessWidget {
       height: 42,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.18),
+        color: Colors.white.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.18)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
@@ -513,7 +513,7 @@ class _DeptoBlock extends StatelessWidget {
       decoration: BoxDecoration(
         color: Palette.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: ink.withOpacity(0.06)),
+        border: Border.all(color: ink.withValues(alpha: 0.06)),
       ),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       child: Column(
@@ -525,9 +525,9 @@ class _DeptoBlock extends StatelessWidget {
                 height: 34,
                 width: 34,
                 decoration: BoxDecoration(
-                  color: Palette.button.withOpacity(0.26),
+                  color: Palette.button.withValues(alpha: 0.26),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Palette.primary.withOpacity(0.10)),
+                  border: Border.all(color: Palette.primary.withValues(alpha: 0.10)),
                 ),
                 child: const Icon(
                   Icons.map_rounded,
@@ -554,12 +554,12 @@ class _DeptoBlock extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Palette.fieldBg,
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: ink.withOpacity(0.06)),
+                  border: Border.all(color: ink.withValues(alpha: 0.06)),
                 ),
                 child: Text(
                   '$count',
                   style: TextStyle(
-                    color: ink.withOpacity(0.8),
+                    color: ink.withValues(alpha: 0.8),
                     fontWeight: FontWeight.w900,
                     fontSize: 12,
                   ),
@@ -614,7 +614,7 @@ class _PedidoCard extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: ink.withOpacity(0.06)),
+            border: Border.all(color: ink.withValues(alpha: 0.06)),
           ),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: Row(
@@ -648,7 +648,7 @@ class _PedidoCard extends StatelessWidget {
                         Text(
                           fecha.isEmpty ? '—' : fecha,
                           style: TextStyle(
-                            color: ink.withOpacity(0.55),
+                            color: ink.withValues(alpha: 0.55),
                             fontWeight: FontWeight.w800,
                             fontSize: 12,
                           ),
@@ -661,7 +661,7 @@ class _PedidoCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: ink.withOpacity(0.78),
+                        color: ink.withValues(alpha: 0.78),
                         fontWeight: FontWeight.w700,
                         fontSize: 12.8,
                         height: 1.2,
@@ -684,7 +684,7 @@ class _PedidoCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Icon(Icons.chevron_right_rounded, color: ink.withOpacity(0.35)),
+              Icon(Icons.chevron_right_rounded, color: ink.withValues(alpha: 0.35)),
             ],
           ),
         ),
@@ -698,7 +698,7 @@ class _PedidoCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Palette.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Palette.ink.withOpacity(0.06)),
+        border: Border.all(color: Palette.ink.withValues(alpha: 0.06)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -708,7 +708,7 @@ class _PedidoCard extends StatelessWidget {
           Text(
             text,
             style: TextStyle(
-              color: Palette.ink.withOpacity(0.72),
+              color: Palette.ink.withValues(alpha: 0.72),
               fontWeight: FontWeight.w800,
               fontSize: 11.5,
             ),
@@ -747,14 +747,14 @@ class _EstadoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: c.withOpacity(0.14),
+        color: c.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: c.withOpacity(0.28)),
+        border: Border.all(color: c.withValues(alpha: 0.28)),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: Palette.ink.withOpacity(0.9),
+          color: Palette.ink.withValues(alpha: 0.9),
           fontWeight: FontWeight.w900,
           fontSize: 11.5,
         ),
@@ -807,7 +807,7 @@ class _CountPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: Palette.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: ink.withOpacity(0.06)),
+        border: Border.all(color: ink.withValues(alpha: 0.06)),
       ),
       child: Text(
         '$count',
@@ -833,12 +833,12 @@ class _HintPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: Palette.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: ink.withOpacity(0.06)),
+        border: Border.all(color: ink.withValues(alpha: 0.06)),
       ),
       child: Text(
         text,
         style: TextStyle(
-          color: ink.withOpacity(0.55),
+          color: ink.withValues(alpha: 0.55),
           fontWeight: FontWeight.w800,
           fontSize: 11.5,
         ),
@@ -867,7 +867,7 @@ class _LoadingFancy extends StatelessWidget {
           Text(
             text,
             style: TextStyle(
-              color: ink.withOpacity(0.6),
+              color: ink.withValues(alpha: 0.6),
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -895,7 +895,7 @@ class _EmptyState extends StatelessWidget {
           decoration: BoxDecoration(
             color: Palette.white,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: ink.withOpacity(0.06)),
+            border: Border.all(color: ink.withValues(alpha: 0.06)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -903,7 +903,7 @@ class _EmptyState extends StatelessWidget {
               Icon(
                 Icons.search_off_rounded,
                 size: 44,
-                color: ink.withOpacity(0.35),
+                color: ink.withValues(alpha: 0.35),
               ),
               const SizedBox(height: 10),
               Text(
@@ -919,7 +919,7 @@ class _EmptyState extends StatelessWidget {
                 'Estado: $estado${query.isEmpty ? '' : ' • "$query"'}',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: ink.withOpacity(0.55),
+                  color: ink.withValues(alpha: 0.55),
                   fontWeight: FontWeight.w800,
                 ),
               ),

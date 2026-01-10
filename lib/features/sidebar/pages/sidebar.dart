@@ -13,12 +13,12 @@ import 'package:flutter_modular/flutter_modular.dart';
 
 import 'package:quimisol_web/core/theme/palette.dart';
 
-import 'package:quimisol_web/features/almacenes/pages/almacenes.dart';
+import 'package:quimisol_web/features/almacenes/views/almacenes.dart';
 import 'package:quimisol_web/features/home/pages/dashboard.dart';
-import 'package:quimisol_web/features/pedidos/pages/pedidos.dart';
-import 'package:quimisol_web/features/productos/pages/productos.dart';
-import 'package:quimisol_web/features/unidades/pages/unidades.dart';
-import 'package:quimisol_web/features/usuarios/pages/usuarios.dart';
+import 'package:quimisol_web/features/pedidos/views/pedidos.dart';
+import 'package:quimisol_web/features/productos/views/productos.dart';
+import 'package:quimisol_web/features/unidades/views/unidades.dart';
+import 'package:quimisol_web/features/usuarios/views/usuarios.dart';
 
 
 class SidebarShellPage extends StatefulWidget {
@@ -256,7 +256,7 @@ class _Sidebar extends StatelessWidget {
       width: isOpen ? _openWidth : _closedWidth,
       decoration: BoxDecoration(
         color: Palette.white,
-        border: Border(right: BorderSide(color: mainColor.withOpacity(0.55))),
+        border: Border(right: BorderSide(color: mainColor.withValues(alpha: 0.55))),
       ),
       child: Column(
         children: [
@@ -308,8 +308,8 @@ class _SidebarHeader extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            mainColor.withOpacity(0.95),
-            Palette.secondary.withOpacity(0.9),
+            mainColor.withValues(alpha: 0.95),
+            Palette.secondary.withValues(alpha: 0.9),
           ],
         ),
       ),
@@ -349,7 +349,7 @@ class _SidebarHeader extends StatelessWidget {
           ],
           Icon(
             open ? Icons.chevron_left_rounded : Icons.chevron_right_rounded,
-            color: Palette.white.withOpacity(0.9),
+            color: Palette.white.withValues(alpha: 0.9),
           ),
         ],
       ),
@@ -376,7 +376,7 @@ class _SidebarItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = selected ? mainColor.withOpacity(0.22) : Colors.transparent;
+    final bg = selected ? mainColor.withValues(alpha: 0.22) : Colors.transparent;
     final iconColor = selected ? Palette.primary : Palette.ink;
     final textColor = selected ? Palette.primary : Palette.ink;
 
@@ -386,7 +386,7 @@ class _SidebarItemTile extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: selected ? mainColor.withOpacity(0.5) : Colors.transparent,
+          color: selected ? mainColor.withValues(alpha: 0.5) : Colors.transparent,
         ),
       ),
       child: InkWell(
@@ -438,7 +438,7 @@ class _SidebarFooter extends StatelessWidget {
           Icon(
             Icons.info_outline_rounded,
             size: 18,
-            color: Palette.ink.withOpacity(0.8),
+            color: Palette.ink.withValues(alpha: 0.8),
           ),
           if (open) ...[
             const SizedBox(width: 8),
@@ -446,7 +446,7 @@ class _SidebarFooter extends StatelessWidget {
               'Admin • Web',
               style: TextStyle(
                 fontSize: 12,
-                color: Palette.ink.withOpacity(0.7),
+                color: Palette.ink.withValues(alpha: 0.7),
                 fontWeight: FontWeight.w600,
               ),
             ),
