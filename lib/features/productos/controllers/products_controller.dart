@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
+import 'package:quimisol_web/features/productos/data/producto_dialog_result.dart';
 import '../data/producto_row.dart';
 import '../data/form_result.dart';
 
@@ -89,16 +90,14 @@ class ProductosController {
     if (bytes.length >= 3 &&
         bytes[0] == 0xFF &&
         bytes[1] == 0xD8 &&
-        bytes[2] == 0xFF) {
-      return 'jpg';
-    }
+        bytes[2] == 0xFF) return 'jpg';
+
     if (bytes.length >= 4 &&
         bytes[0] == 0x89 &&
         bytes[1] == 0x50 &&
         bytes[2] == 0x4E &&
-        bytes[3] == 0x47) {
-      return 'png';
-    }
+        bytes[3] == 0x47) return 'png';
+
     return 'png';
   }
 
@@ -125,7 +124,54 @@ class ProductosController {
     } catch (_) {}
   }
 
-  Future<void> crearProducto(ProductoFormResult r) async {
+  // ===========================================================================
+  // ✅ DESCUENTO (SUBCOLECCIÓN)
+  // Ruta: productos/{productId}/descuentos/activo
+  // ===========================================================================
+  DocumentReference<Map<String, dynamic>> _descuentoActivoRef(String productId) {
+    return productosRef.doc(productId).collection('descuentos').doc('activo');
+  }
+
+  Future<void> _upsertDescuento({
+    required String productId,
+    required DescuentoDraft? descuento,
+  }) async {
+    final ref = _descuentoActivoRef(productId);
+
+    // Si no hay descuento => lo marcamos inactivo y limpiamos campos
+    if (descuento == null || !descuento.isValid) {
+      await ref.set({
+        'activo': false,
+        'tipo': FieldValue.delete(),
+        'valor': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      return;
+    }
+
+    // Mantener createdAt solo la primera vez
+    final snap = await ref.get();
+    final base = <String, dynamic>{
+      'activo': true,
+      'tipo': descuento.tipo,
+      'valor': descuento.valor,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    if (!snap.exists) {
+      base['createdAt'] = FieldValue.serverTimestamp();
+    }
+
+    await ref.set(base, SetOptions(merge: true));
+  }
+
+  // ===========================================================================
+  // ✅ CREAR / ACTUALIZAR con descuento
+  // ===========================================================================
+  Future<void> crearProducto(
+    ProductoFormResult r, {
+    DescuentoDraft? descuento,
+  }) async {
     final doc = productosRef.doc();
     final id = doc.id;
 
@@ -159,6 +205,8 @@ class ProductosController {
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+
+    await _upsertDescuento(productId: id, descuento: descuento);
   }
 
   Future<void> actualizarProducto(
@@ -166,14 +214,14 @@ class ProductosController {
     ProductoFormResult r, {
     String? existingImagenUrl,
     String? existingImagenPath,
+    DescuentoDraft? descuento,
   }) async {
     String url = existingImagenUrl ?? '';
     String path = existingImagenPath ?? '';
 
     if (r.imageBytes != null) {
-      if (path.trim().isNotEmpty) {
-        await deleteImage(path);
-      }
+      if (path.trim().isNotEmpty) await deleteImage(path);
+
       final up = await uploadImage(
         productId: id,
         bytes: r.imageBytes!,
@@ -198,10 +246,17 @@ class ProductosController {
       'almacenNombre': r.almacenNombre,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+
+    await _upsertDescuento(productId: id, descuento: descuento);
   }
 
   Future<void> eliminarProducto(String id, String? imagenPath) async {
     await productosRef.doc(id).delete();
     await deleteImage(imagenPath);
+
+    // opcional: borrar descuento
+    try {
+      await _descuentoActivoRef(id).delete();
+    } catch (_) {}
   }
 }
