@@ -29,7 +29,14 @@ class ProductoDialogController extends ChangeNotifier {
         descCtrl = TextEditingController(text: initialDescripcion ?? ''),
         precioCtrl = TextEditingController(text: initialPrecio ?? '0'),
         stockCtrl = TextEditingController(text: initialStock ?? '0'),
-        descuentoCtrl = TextEditingController(text: '') {
+        descuentoCtrl = TextEditingController(text: ''),
+        // ✅ Promo banner defaults
+        promoTitleCtrl = TextEditingController(text: 'New Collection'),
+        promoSubtitleCtrl = TextEditingController(
+          text: 'Discount 50% for\nthe first transaction',
+        ),
+        promoButtonTextCtrl = TextEditingController(text: 'Shop Now'),
+        promoImageUrlCtrl = TextEditingController(text: '') {
     tipoItem = (initialTipoItem?.trim().isNotEmpty ?? false)
         ? initialTipoItem!.trim()
         : 'PRODUCTO';
@@ -47,6 +54,12 @@ class ProductoDialogController extends ChangeNotifier {
     precioCtrl.addListener(_bumpPreview);
     stockCtrl.addListener(_bumpPreview);
     descuentoCtrl.addListener(_bumpPreview);
+
+    // ✅ refresca preview con escritura en promo banner
+    promoTitleCtrl.addListener(_bumpPreview);
+    promoSubtitleCtrl.addListener(_bumpPreview);
+    promoButtonTextCtrl.addListener(_bumpPreview);
+    promoImageUrlCtrl.addListener(_bumpPreview);
   }
 
   final String title;
@@ -62,6 +75,13 @@ class ProductoDialogController extends ChangeNotifier {
   String? agregarDescuento; // null | "SI" | "NO"
   String descuentoTipo = 'PORCENTAJE'; // PORCENTAJE | MONTO
   final TextEditingController descuentoCtrl;
+
+  // ✅ promo banner
+  bool promoBannerEnabled = false;
+  final TextEditingController promoTitleCtrl;
+  final TextEditingController promoSubtitleCtrl;
+  final TextEditingController promoButtonTextCtrl;
+  final TextEditingController promoImageUrlCtrl;
 
   // selects
   String tipoItem = 'PRODUCTO';
@@ -107,10 +127,16 @@ class ProductoDialogController extends ChangeNotifier {
 
   void setAgregarDescuento(String? v) {
     agregarDescuento = v;
+
     if (agregarDescuento != 'SI') {
       descuentoTipo = 'PORCENTAJE';
       descuentoCtrl.text = '';
+
+      // ✅ si quitan descuento, opcionalmente apagamos banner
+      promoBannerEnabled = false;
+      promoImageUrlCtrl.text = promoImageUrlCtrl.text; // no-op (mantiene)
     }
+
     notifyListeners();
     _bumpPreview();
   }
@@ -119,6 +145,29 @@ class ProductoDialogController extends ChangeNotifier {
     descuentoTipo = v;
     notifyListeners();
     _bumpPreview();
+  }
+
+  // ✅ promo banner enable
+  void setPromoBannerEnabled(bool v) {
+    promoBannerEnabled = v;
+    notifyListeners();
+    _bumpPreview();
+  }
+
+  // Helpers con fallback (para preview)
+  String get promoTitleSafe =>
+      promoTitleCtrl.text.trim().isEmpty ? 'New Collection' : promoTitleCtrl.text.trim();
+
+  String get promoSubtitleSafe => promoSubtitleCtrl.text.trim().isEmpty
+      ? 'Discount 50% for\nthe first transaction'
+      : promoSubtitleCtrl.text;
+
+  String get promoButtonTextSafe =>
+      promoButtonTextCtrl.text.trim().isEmpty ? 'Shop Now' : promoButtonTextCtrl.text.trim();
+
+  String? get promoImageUrlSafe {
+    final v = promoImageUrlCtrl.text.trim();
+    return v.isEmpty ? null : v;
   }
 
   // --------------------
@@ -176,14 +225,13 @@ class ProductoDialogController extends ChangeNotifier {
       _bumpPreview();
       notifyListeners();
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error abriendo selector: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error abriendo selector: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -226,6 +274,9 @@ class ProductoDialogController extends ChangeNotifier {
         almacenNombre: almacen.label,
       ),
       descuento: buildDescuentoDraft(),
+      // ✅ Nota: si quieres persistir el banner en Firestore,
+      // lo ideal es extender ProductoDialogResult para incluir promoBannerDraft.
+      // Por ahora esto es SOLO para la vista previa del dialog.
     );
   }
 
@@ -236,6 +287,11 @@ class ProductoDialogController extends ChangeNotifier {
     stockCtrl.removeListener(_bumpPreview);
     descuentoCtrl.removeListener(_bumpPreview);
 
+    promoTitleCtrl.removeListener(_bumpPreview);
+    promoSubtitleCtrl.removeListener(_bumpPreview);
+    promoButtonTextCtrl.removeListener(_bumpPreview);
+    promoImageUrlCtrl.removeListener(_bumpPreview);
+
     previewTick.dispose();
 
     codigoCtrl.dispose();
@@ -244,6 +300,11 @@ class ProductoDialogController extends ChangeNotifier {
     precioCtrl.dispose();
     stockCtrl.dispose();
     descuentoCtrl.dispose();
+
+    promoTitleCtrl.dispose();
+    promoSubtitleCtrl.dispose();
+    promoButtonTextCtrl.dispose();
+    promoImageUrlCtrl.dispose();
 
     super.dispose();
   }
