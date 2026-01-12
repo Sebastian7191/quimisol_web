@@ -1,4 +1,4 @@
-// lib/features/admin/productos/widgets/dialog/widgets/producto_dialog_form.dart
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:quimisol_web/features/productos/controllers/producto_dialog_controller.dart';
@@ -8,8 +8,6 @@ import 'package:quimisol_web/features/productos/data/unidad_option.dart';
 import 'package:quimisol_web/features/productos/widgets/dialog/producto_dialog_discount_block.dart';
 import 'package:quimisol_web/features/productos/widgets/dialog/producto_dialog_image_card.dart';
 import 'package:quimisol_web/features/productos/widgets/dialog/producto_dialog_ui.dart';
-
-
 
 class ProductoDialogForm extends StatelessWidget {
   const ProductoDialogForm({
@@ -25,9 +23,12 @@ class ProductoDialogForm extends StatelessWidget {
   final List<UnidadOption> unidades;
   final List<AlmacenOption> almacenes;
 
+  Stream<QuerySnapshot<Map<String, dynamic>>> _categoriasStream() {
+    return FirebaseFirestore.instance.collection('categorias').snapshots();
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Solo reconstruye cuando cambian dropdowns/descuento (notifyListeners)
     return AnimatedBuilder(
       animation: controller,
       builder: (_, __) {
@@ -37,7 +38,7 @@ class ProductoDialogForm extends StatelessWidget {
             children: [
               ProductoDialogUI.sectionTitle(
                 title: 'Datos generales',
-                subtitle: 'Almacén, tipo, código y nombre.',
+                subtitle: 'Almacén, categoría, tipo, código y nombre.',
                 icon: Icons.badge_rounded,
               ),
               ProductoDialogUI.gap(12),
@@ -48,15 +49,125 @@ class ProductoDialogForm extends StatelessWidget {
                     DropdownButtonFormField<String>(
                       value: controller.almacenId,
                       items: almacenes
-                          .map((a) => DropdownMenuItem(value: a.id, child: Text(a.label)))
+                          .map((a) => DropdownMenuItem(
+                                value: a.id,
+                                child: Text(a.label),
+                              ))
                           .toList(),
-                      onChanged: controller.saving ? null : controller.setAlmacenId,
+                      onChanged:
+                          controller.saving ? null : controller.setAlmacenId,
                       decoration: ProductoDialogUI.decor(
                         label: 'Almacén',
                         prefixIcon: const Icon(Icons.warehouse_rounded),
                       ),
-                      validator: (v) => (v == null || v.isEmpty) ? 'Selecciona un almacén' : null,
+                      validator: (v) => (v == null || v.isEmpty)
+                          ? 'Selecciona un almacén'
+                          : null,
                     ),
+
+                    // ✅ CATEGORÍAS
+                    ProductoDialogUI.gap(),
+                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: _categoriasStream(),
+                      builder: (context, snap) {
+                        if (snap.hasError) {
+                          return Text(
+                            'Error al cargar categorías: ${snap.error}',
+                            style: const TextStyle(color: Colors.red),
+                          );
+                        }
+
+                        if (snap.connectionState == ConnectionState.waiting) {
+                          return DropdownButtonFormField<String?>(
+                            value: controller.categoriaId,
+                            items: const [],
+                            onChanged: null,
+                            decoration: ProductoDialogUI.decor(
+                              label: 'Categoría',
+                              hint: 'Cargando...',
+                              prefixIcon: const Icon(Icons.category_rounded),
+                            ),
+                          );
+                        }
+
+                        final docs = snap.data?.docs ?? [];
+                        final categorias = docs
+                            .map((d) {
+                              final data = d.data();
+                              return {
+                                'id': d.id,
+                                'nombre':
+                                    (data['nombre'] ?? '').toString().trim(),
+                              };
+                            })
+                            .where((c) =>
+                                (c['nombre'] ?? '').toString().isNotEmpty)
+                            .toList();
+
+                        if (categorias.isEmpty) {
+                          return DropdownButtonFormField<String?>(
+                            value: null,
+                            items: const [
+                              DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text('— Sin categorías —'),
+                              ),
+                            ],
+                            onChanged: null,
+                            decoration: ProductoDialogUI.decor(
+                              label: 'Categoría',
+                              hint: 'Crea una categoría primero',
+                              prefixIcon: const Icon(Icons.category_rounded),
+                            ),
+                          );
+                        }
+
+                        final existsSelected =
+                            controller.categoriaId != null &&
+                                categorias.any((c) =>
+                                    c['id'] == controller.categoriaId);
+
+                        final selectedId =
+                            existsSelected ? controller.categoriaId : null;
+
+                        return DropdownButtonFormField<String?>(
+                          value: selectedId,
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('— Seleccionar —'),
+                            ),
+                            ...categorias.map(
+                              (c) => DropdownMenuItem<String?>(
+                                value: c['id'] as String,
+                                child: Text(c['nombre'] as String),
+                              ),
+                            ),
+                          ],
+                          onChanged: controller.saving
+                              ? null
+                              : (id) {
+                                  if (id == null) {
+                                    // ✅ YA NO FALLA: setCategoria acepta null
+                                    controller.setCategoria(null, null);
+                                    return;
+                                  }
+                                  final cat = categorias
+                                      .firstWhere((c) => c['id'] == id);
+                                  controller.setCategoria(
+                                    id,
+                                    (cat['nombre'] ?? '').toString(),
+                                  );
+                                },
+                          decoration: ProductoDialogUI.decor(
+                            label: 'Categoría',
+                            prefixIcon: const Icon(Icons.category_rounded),
+                            hint: 'Selecciona una categoría',
+                          ),
+                        );
+                      },
+                    ),
+
                     ProductoDialogUI.gap(),
 
                     Row(
@@ -77,10 +188,19 @@ class ProductoDialogForm extends StatelessWidget {
                           child: DropdownButtonFormField<String>(
                             value: controller.tipoItem,
                             items: const [
-                              DropdownMenuItem(value: 'PRODUCTO', child: Text('PRODUCTO')),
-                              DropdownMenuItem(value: 'INSUMO', child: Text('INSUMO')),
+                              DropdownMenuItem(
+                                value: 'PRODUCTO',
+                                child: Text('PRODUCTO'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'INSUMO',
+                                child: Text('INSUMO'),
+                              ),
                             ],
-                            onChanged: controller.saving ? null : (v) => controller.setTipoItem(v ?? controller.tipoItem),
+                            onChanged: controller.saving
+                                ? null
+                                : (v) => controller
+                                    .setTipoItem(v ?? controller.tipoItem),
                             decoration: ProductoDialogUI.decor(
                               label: 'Tipo',
                               prefixIcon: const Icon(Icons.category_rounded),
@@ -99,7 +219,9 @@ class ProductoDialogForm extends StatelessWidget {
                         prefixIcon: const Icon(Icons.inventory_2_rounded),
                       ),
                       validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Ingresa un nombre';
+                        if (v == null || v.trim().isEmpty) {
+                          return 'Ingresa un nombre';
+                        }
                         if (v.trim().length < 2) return 'Mínimo 2 caracteres';
                         return null;
                       },
@@ -126,14 +248,20 @@ class ProductoDialogForm extends StatelessWidget {
                           child: DropdownButtonFormField<String>(
                             value: controller.unidadId,
                             items: unidades
-                                .map((u) => DropdownMenuItem(value: u.id, child: Text(u.label)))
+                                .map((u) => DropdownMenuItem(
+                                      value: u.id,
+                                      child: Text(u.label),
+                                    ))
                                 .toList(),
-                            onChanged: controller.saving ? null : controller.setUnidadId,
+                            onChanged:
+                                controller.saving ? null : controller.setUnidadId,
                             decoration: ProductoDialogUI.decor(
                               label: 'Unidad',
                               prefixIcon: const Icon(Icons.straighten_rounded),
                             ),
-                            validator: (v) => (v == null || v.isEmpty) ? 'Selecciona una unidad' : null,
+                            validator: (v) => (v == null || v.isEmpty)
+                                ? 'Selecciona una unidad'
+                                : null,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -142,7 +270,9 @@ class ProductoDialogForm extends StatelessWidget {
                             controller: controller.stockCtrl,
                             enabled: !controller.saving,
                             keyboardType: TextInputType.number,
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
                             decoration: ProductoDialogUI.decor(
                               label: 'Stock',
                               prefixIcon: const Icon(Icons.numbers_rounded),
@@ -163,9 +293,12 @@ class ProductoDialogForm extends StatelessWidget {
                     TextFormField(
                       controller: controller.precioCtrl,
                       enabled: !controller.saving,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'^\d*([.,]\d{0,2})?$')),
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d*([.,]\d{0,2})?$'),
+                        ),
                       ],
                       decoration: ProductoDialogUI.decor(
                         label: 'Precio (Bs)',

@@ -2,10 +2,11 @@
 //
 // ✅ Agregado "Pedidos" al sidebar + pages
 // ✅ IndexFromPath actualizado para /pedidos
-// ✅ Import de la nueva page PedidosPage (la que te pasé)
+// ✅ NUEVO: Categorías agregado al sidebar + pages
+// ✅ IndexFromPath actualizado para /categorias
 //
-// OJO: ajusta el import de PedidosPage según dónde lo guardaste.
-// En mi ejemplo anterior: lib/features/admin/pedidos/pedidos_page.dart
+// OJO: ajusta el import de CategoriasPage según dónde lo guardaste.
+// En mi ejemplo: lib/features/categorias/views/categorias.dart
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -20,6 +21,8 @@ import 'package:quimisol_web/features/productos/views/productos.dart';
 import 'package:quimisol_web/features/unidades/views/unidades.dart';
 import 'package:quimisol_web/features/usuarios/views/usuarios.dart';
 
+// ✅ NUEVO: Categorías
+import 'package:quimisol_web/features/categorias/views/categorias.dart';
 
 class SidebarShellPage extends StatefulWidget {
   const SidebarShellPage({super.key});
@@ -68,7 +71,14 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
       route: '/unidades',
     ),
 
-    // ✅ NUEVO: PEDIDOS
+    // ✅ NUEVO: CATEGORÍAS
+    _SideItem(
+      icon: Icons.category_rounded,
+      label: 'Categorías',
+      route: '/categorias',
+    ),
+
+    // ✅ PEDIDOS
     _SideItem(
       icon: Icons.receipt_long_rounded,
       label: 'Pedidos',
@@ -102,7 +112,10 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
     if (path.startsWith('/unidades')) return 4;
 
     // ✅ NUEVO
-    if (path.startsWith('/pedidos')) return 5;
+    if (path.startsWith('/categorias')) return 5;
+
+    // ✅ PEDIDOS (se movió de índice)
+    if (path.startsWith('/pedidos')) return 6;
 
     return 0; // dashboard por defecto
   }
@@ -159,6 +172,9 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
       const UnidadesPage(),
 
       // ✅ NUEVO
+      const CategoriasPage(),
+
+      // ✅ PEDIDOS
       const PedidosPage(),
     ];
 
@@ -256,7 +272,9 @@ class _Sidebar extends StatelessWidget {
       width: isOpen ? _openWidth : _closedWidth,
       decoration: BoxDecoration(
         color: Palette.white,
-        border: Border(right: BorderSide(color: mainColor.withValues(alpha: 0.55))),
+        border: Border(
+          right: BorderSide(color: mainColor.withValues(alpha: 0.55)),
+        ),
       ),
       child: Column(
         children: [
@@ -386,7 +404,8 @@ class _SidebarItemTile extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: selected ? mainColor.withValues(alpha: 0.5) : Colors.transparent,
+          color:
+              selected ? mainColor.withValues(alpha: 0.5) : Colors.transparent,
         ),
       ),
       child: InkWell(

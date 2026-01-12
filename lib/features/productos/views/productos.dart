@@ -97,7 +97,8 @@ class _ProductosPageState extends State<ProductosPage> {
       // ✅ Ahora el producto está dentro de res.producto
       await controller.crearProducto(
         res.producto,
-        descuento: res.descuento, // ✅ nuevo
+        descuento: res.descuento,
+        promoBannerEnabled: res.promoBannerEnabled, // ✅ NUEVO
       );
 
       if (mounted) {
@@ -148,10 +149,11 @@ class _ProductosPageState extends State<ProductosPage> {
     try {
       await controller.actualizarProducto(
         id,
-        res.producto, // ✅
+        res.producto,
         existingImagenUrl: product.imagenUrl,
         existingImagenPath: product.imagenPath,
-        descuento: res.descuento, // ✅ nuevo
+        descuento: res.descuento,
+        promoBannerEnabled: res.promoBannerEnabled, // ✅ NUEVO
       );
 
       if (mounted) {

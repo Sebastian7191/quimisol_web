@@ -1,6 +1,6 @@
+// lib/features/productos/controllers/producto_dialog_controller.dart
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker_web/image_picker_web.dart';
 
@@ -9,6 +9,8 @@ import 'package:quimisol_web/features/productos/data/form_result.dart';
 import 'package:quimisol_web/features/productos/data/unidad_option.dart';
 import 'package:quimisol_web/features/productos/data/producto_dialog_result.dart';
 
+// OJO: tú ya tienes un descuento.dart que define DescuentoDraft.
+// Este import "hide" evita choque si en ese archivo hay otro draft.
 import '../data/descuento.dart' hide DescuentoDraft;
 
 class ProductoDialogController extends ChangeNotifier {
@@ -23,7 +25,11 @@ class ProductoDialogController extends ChangeNotifier {
     required String? initialPrecio,
     required String? initialStock,
     required String? initialAlmacenId,
-  })  : existingImageUrl = (initialImagenUrl).trim(),
+
+    // ✅ NUEVO: categoría (para editar)
+    String? initialCategoriaId,
+    String? initialCategoriaNombre,
+  })  : existingImageUrl = initialImagenUrl.trim(),
         codigoCtrl = TextEditingController(text: initialCodigo ?? ''),
         nombreCtrl = TextEditingController(text: initialNombre ?? ''),
         descCtrl = TextEditingController(text: initialDescripcion ?? ''),
@@ -49,6 +55,15 @@ class ProductoDialogController extends ChangeNotifier {
         ? initialAlmacenId!.trim()
         : null;
 
+    // ✅ categoría inicial (para editar)
+    categoriaId = (initialCategoriaId?.trim().isNotEmpty ?? false)
+        ? initialCategoriaId!.trim()
+        : null;
+
+    categoriaNombre = (initialCategoriaNombre?.trim().isNotEmpty ?? false)
+        ? initialCategoriaNombre!.trim()
+        : null;
+
     // refresca preview con escritura
     nombreCtrl.addListener(_bumpPreview);
     precioCtrl.addListener(_bumpPreview);
@@ -64,38 +79,56 @@ class ProductoDialogController extends ChangeNotifier {
 
   final String title;
 
-  // controllers
+  // --------------------
+  // text controllers
+  // --------------------
   final TextEditingController codigoCtrl;
   final TextEditingController nombreCtrl;
   final TextEditingController descCtrl;
   final TextEditingController precioCtrl;
   final TextEditingController stockCtrl;
 
+  // --------------------
   // descuento
+  // --------------------
   String? agregarDescuento; // null | "SI" | "NO"
   String descuentoTipo = 'PORCENTAJE'; // PORCENTAJE | MONTO
   final TextEditingController descuentoCtrl;
 
+  // --------------------
   // ✅ promo banner
+  // --------------------
   bool promoBannerEnabled = false;
   final TextEditingController promoTitleCtrl;
   final TextEditingController promoSubtitleCtrl;
   final TextEditingController promoButtonTextCtrl;
   final TextEditingController promoImageUrlCtrl;
 
+  // --------------------
+  // ✅ categoría
+  // --------------------
+  String? categoriaId;
+  String? categoriaNombre;
+
+  // --------------------
   // selects
+  // --------------------
   String tipoItem = 'PRODUCTO';
   String? unidadId;
   String? almacenId;
 
+  // --------------------
   // image
+  // --------------------
   Uint8List? pickedBytes;
   final String existingImageUrl;
 
+  // --------------------
   // UI state
+  // --------------------
   bool saving = false;
 
-  /// Solo para preview
+  /// Solo para preview (si tu preview panel usa esto)
   final ValueNotifier<int> previewTick = ValueNotifier<int>(0);
 
   bool get descuentoEnabled => agregarDescuento == 'SI';
@@ -125,6 +158,14 @@ class ProductoDialogController extends ChangeNotifier {
     _bumpPreview();
   }
 
+  /// ✅ set categoría (ACEPTA NULL) -> para "— Seleccionar —"
+  void setCategoria(String? id, String? nombre) {
+    categoriaId = id;
+    categoriaNombre = nombre;
+    notifyListeners();
+    _bumpPreview();
+  }
+
   void setAgregarDescuento(String? v) {
     agregarDescuento = v;
 
@@ -132,9 +173,8 @@ class ProductoDialogController extends ChangeNotifier {
       descuentoTipo = 'PORCENTAJE';
       descuentoCtrl.text = '';
 
-      // ✅ si quitan descuento, opcionalmente apagamos banner
+      // ✅ si quitan descuento, apagamos banner
       promoBannerEnabled = false;
-      promoImageUrlCtrl.text = promoImageUrlCtrl.text; // no-op (mantiene)
     }
 
     notifyListeners();
@@ -154,7 +194,9 @@ class ProductoDialogController extends ChangeNotifier {
     _bumpPreview();
   }
 
-  // Helpers con fallback (para preview)
+  // --------------------
+  // helpers promo (para preview)
+  // --------------------
   String get promoTitleSafe =>
       promoTitleCtrl.text.trim().isEmpty ? 'New Collection' : promoTitleCtrl.text.trim();
 
@@ -173,13 +215,11 @@ class ProductoDialogController extends ChangeNotifier {
   // --------------------
   // parsing
   // --------------------
-  double parsePrecio(String v) =>
-      double.tryParse(v.replaceAll(',', '.').trim()) ?? 0.0;
+  double parsePrecio(String v) => double.tryParse(v.replaceAll(',', '.').trim()) ?? 0.0;
 
   int parseStock(String v) => int.tryParse(v.trim()) ?? 0;
 
-  double parseDouble(String v) =>
-      double.tryParse(v.replaceAll(',', '.').trim()) ?? 0.0;
+  double parseDouble(String v) => double.tryParse(v.replaceAll(',', '.').trim()) ?? 0.0;
 
   double precioBaseNow() => parsePrecio(precioCtrl.text);
 
@@ -243,6 +283,7 @@ class ProductoDialogController extends ChangeNotifier {
 
   // --------------------
   // build result
+  // ✅ AQUÍ ESTÁ lo importante: incluye categoriaId/categoriaNombre
   // --------------------
   ProductoDialogResult buildResult({
     required List<UnidadOption> unidades,
@@ -272,11 +313,12 @@ class ProductoDialogController extends ChangeNotifier {
         imageName: null,
         almacenId: almacen.id,
         almacenNombre: almacen.label,
+
+        // ✅ NUEVO
+        categoriaId: categoriaId,
+        categoriaNombre: categoriaNombre,
       ),
       descuento: buildDescuentoDraft(),
-      // ✅ Nota: si quieres persistir el banner en Firestore,
-      // lo ideal es extender ProductoDialogResult para incluir promoBannerDraft.
-      // Por ahora esto es SOLO para la vista previa del dialog.
     );
   }
 

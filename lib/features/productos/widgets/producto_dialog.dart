@@ -2,15 +2,22 @@
 import 'package:flutter/material.dart';
 
 import 'package:quimisol_web/core/theme/palette.dart';
-import 'package:quimisol_web/features/productos/controllers/producto_dialog_controller.dart';
+
+// ✅ usa prefijo para evitar ambigüedad
+import 'package:quimisol_web/features/productos/controllers/producto_dialog_controller.dart'
+    as ctrl;
+
 import 'package:quimisol_web/features/productos/data/almacen_option.dart';
 import 'package:quimisol_web/features/productos/data/unidad_option.dart';
-import 'package:quimisol_web/features/productos/widgets/dialog/producto_dialog_form.dart';
+
+// ✅ si producto_dialog_form.dart está “creando” otro ProductoDialogController,
+// lo ocultamos aquí para evitar el conflicto
+import 'package:quimisol_web/features/productos/widgets/dialog/producto_dialog_form.dart'
+    hide ProductoDialogController;
+
 import 'package:quimisol_web/features/productos/widgets/dialog/producto_dialog_preview_panel.dart';
 import 'package:quimisol_web/features/productos/widgets/dialog/producto_dialog_top_bar.dart';
 import 'package:quimisol_web/features/productos/widgets/dialog/producto_dialog_ui.dart';
-
-
 
 class ProductoDialog extends StatefulWidget {
   final String title;
@@ -29,6 +36,10 @@ class ProductoDialog extends StatefulWidget {
   final String? initialImagenPath;
   final String? initialAlmacenId;
 
+  // ✅ NUEVO: categoría (para EDITAR)
+  final String? initialCategoriaId;
+  final String? initialCategoriaNombre;
+
   const ProductoDialog({
     super.key,
     required this.title,
@@ -44,6 +55,8 @@ class ProductoDialog extends StatefulWidget {
     this.initialImagenUrl,
     this.initialImagenPath,
     this.initialAlmacenId,
+    this.initialCategoriaId,
+    this.initialCategoriaNombre,
   });
 
   @override
@@ -54,12 +67,13 @@ class _ProductoDialogState extends State<ProductoDialog> {
   final _formKey = GlobalKey<FormState>();
   final ScrollController _formScrollCtrl = ScrollController();
 
-  late final ProductoDialogController c;
+  late final ctrl.ProductoDialogController c;
 
   @override
   void initState() {
     super.initState();
-    c = ProductoDialogController(
+
+    c = ctrl.ProductoDialogController(
       title: widget.title,
       initialImagenUrl: widget.initialImagenUrl ?? '',
       initialCodigo: widget.initialCodigo,
@@ -70,11 +84,19 @@ class _ProductoDialogState extends State<ProductoDialog> {
       initialPrecio: widget.initialPrecio,
       initialStock: widget.initialStock,
       initialAlmacenId: widget.initialAlmacenId,
+
+      // ✅ NUEVO
+      initialCategoriaId: widget.initialCategoriaId,
+      initialCategoriaNombre: widget.initialCategoriaNombre,
     );
 
     // defaults si vienen null y hay listas
-    if (c.unidadId == null && widget.unidades.isNotEmpty) c.setUnidadId(widget.unidades.first.id);
-    if (c.almacenId == null && widget.almacenes.isNotEmpty) c.setAlmacenId(widget.almacenes.first.id);
+    if (c.unidadId == null && widget.unidades.isNotEmpty) {
+      c.setUnidadId(widget.unidades.first.id);
+    }
+    if (c.almacenId == null && widget.almacenes.isNotEmpty) {
+      c.setAlmacenId(widget.almacenes.first.id);
+    }
   }
 
   @override
@@ -91,7 +113,11 @@ class _ProductoDialogState extends State<ProductoDialog> {
 
     c.saving = true;
 
-    final result = c.buildResult(unidades: widget.unidades, almacenes: widget.almacenes);
+    final result = c.buildResult(
+      unidades: widget.unidades,
+      almacenes: widget.almacenes,
+    );
+
     Navigator.pop(context, result);
   }
 
@@ -106,7 +132,10 @@ class _ProductoDialogState extends State<ProductoDialog> {
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: 1100, maxHeight: maxH),
         child: Container(
-          decoration: const BoxDecoration(color: Palette.white, borderRadius: ProductoDialogUI.r18),
+          decoration: const BoxDecoration(
+            color: Palette.white,
+            borderRadius: ProductoDialogUI.r18,
+          ),
           child: Padding(
             padding: const EdgeInsets.all(18),
             child: Column(
@@ -116,7 +145,6 @@ class _ProductoDialogState extends State<ProductoDialog> {
                   onClose: () => Navigator.pop(context),
                 ),
                 const SizedBox(height: 14),
-
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, box) {
@@ -138,7 +166,7 @@ class _ProductoDialogState extends State<ProductoDialog> {
                       );
 
                       final previewPanel = SizedBox(
-                        width: 360, // ✅ ancho del panel preview
+                        width: 360,
                         child: ProductoDialogPreviewPanel(controller: c),
                       );
 
@@ -148,7 +176,10 @@ class _ProductoDialogState extends State<ProductoDialog> {
                           children: [
                             Expanded(child: formScrollable),
                             const SizedBox(width: 14),
-                            Align(alignment: Alignment.topCenter, child: previewPanel),
+                            Align(
+                              alignment: Alignment.topCenter,
+                              child: previewPanel,
+                            ),
                           ],
                         );
                       }
@@ -163,9 +194,7 @@ class _ProductoDialogState extends State<ProductoDialog> {
                     },
                   ),
                 ),
-
                 const SizedBox(height: 12),
-
                 Row(
                   children: [
                     Expanded(
@@ -173,9 +202,13 @@ class _ProductoDialogState extends State<ProductoDialog> {
                         onPressed: c.saving ? null : () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Palette.ink,
-                          side: BorderSide(color: Palette.button.withValues(alpha: 0.55)),
+                          side: BorderSide(
+                            color: Palette.button.withValues(alpha: 0.55),
+                          ),
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                           textStyle: const TextStyle(fontWeight: FontWeight.w900),
                         ),
                         child: const Text('Cancelar'),
@@ -190,7 +223,9 @@ class _ProductoDialogState extends State<ProductoDialog> {
                           foregroundColor: Palette.white,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                           textStyle: const TextStyle(fontWeight: FontWeight.w900),
                         ),
                         child: c.saving

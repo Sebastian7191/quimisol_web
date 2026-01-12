@@ -16,6 +16,10 @@ class ProductoFormResult {
   final String almacenId;
   final String almacenNombre;
 
+  // ✅ NUEVO
+  final String? categoriaId;
+  final String? categoriaNombre;
+
   ProductoFormResult({
     required this.codigo,
     required this.nombre,
@@ -29,5 +33,9 @@ class ProductoFormResult {
     this.imageName,
     required this.almacenId,
     required this.almacenNombre,
+
+    // ✅ NUEVO
+    this.categoriaId,
+    this.categoriaNombre,
   });
 }

@@ -1,4 +1,6 @@
+// lib/features/productos/controllers/products_controller.dart
 import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
@@ -22,6 +24,10 @@ class ProductosController {
   CollectionReference<Map<String, dynamic>> get almacenesRef =>
       _db.collection('almacenes');
 
+  // ✅ NUEVO: banners
+  CollectionReference<Map<String, dynamic>> get bannersRef =>
+      _db.collection('banners');
+
   Stream<QuerySnapshot<Map<String, dynamic>>> productosStream() =>
       productosRef.snapshots();
 
@@ -31,6 +37,9 @@ class ProductosController {
   Stream<QuerySnapshot<Map<String, dynamic>>> almacenesStream() =>
       almacenesRef.snapshots();
 
+  // ===========================================================================
+  // ✅ MAP PRODUCTO (incluye categoría)
+  // ===========================================================================
   ProductoRow mapProducto(DocumentSnapshot<Map<String, dynamic>> d) {
     final data = d.data() ?? {};
 
@@ -58,6 +67,10 @@ class ProductosController {
       imagenPath: (data['imagenPath'] ?? '').toString(),
       almacenId: (data['almacenId'] ?? '').toString(),
       almacenNombre: (data['almacenNombre'] ?? '').toString(),
+
+      // ✅ NUEVO: categoría (si en Firestore no existe, queda '')
+      categoriaId: (data['categoriaId'] ?? '').toString(),
+      categoriaNombre: (data['categoriaNombre'] ?? '').toString(),
     );
   }
 
@@ -80,6 +93,9 @@ class ProductosController {
     }).toList();
   }
 
+  // ===========================================================================
+  // ✅ IMÁGENES
+  // ===========================================================================
   String sanitizeFilename(String name) {
     final cleaned = name.trim().replaceAll(RegExp(r'\s+'), '_');
     if (cleaned.isEmpty) return 'imagen.png';
@@ -166,11 +182,63 @@ class ProductosController {
   }
 
   // ===========================================================================
-  // ✅ CREAR / ACTUALIZAR con descuento
+  // ✅ BANNER PROMO (colección banners)
+  // Doc: banners/{productoId}
+  // Campos: titulo, subtitulo, imagen, estado(ACTIVO/INACTIVO), idproducto
+  // ===========================================================================
+  String _bannerSubtitleFrom(DescuentoDraft? d) {
+    if (d == null || !d.isValid) return '';
+    if (d.tipo == 'PORCENTAJE') {
+      final v = d.valor;
+      final txt = (v % 1 == 0) ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+      return '$txt%';
+    }
+    return 'Bs ${d.valor.toStringAsFixed(2)}';
+  }
+
+  Future<void> _syncBanner({
+    required String productoId,
+    required String titulo,
+    required String imagenUrl,
+    required bool enabled,
+    required DescuentoDraft? descuento,
+  }) async {
+    final ref = bannersRef.doc(productoId);
+
+    // OFF: marcar INACTIVO solo si existe (no crear doc nuevo)
+    if (!enabled) {
+      final snap = await ref.get();
+      if (snap.exists) {
+        await ref.set({'estado': 'INACTIVO'}, SetOptions(merge: true));
+      }
+      return;
+    }
+
+    // ON: crear/actualizar con todos los campos
+    await ref.set({
+      'titulo': titulo.trim(),
+      'subtitulo': _bannerSubtitleFrom(descuento),
+      'imagen': imagenUrl.trim(),
+      'estado': 'ACTIVO',
+      'idproducto': productoId,
+      'updatedAt': FieldValue.serverTimestamp(),
+
+      // con merge:true no "pisa" si ya existe
+      'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  // ===========================================================================
+  // ✅ CREAR / ACTUALIZAR con descuento + banner + categoría
+  // IMPORTANTE: para que se guarde categoriaId/categoriaNombre,
+  // tu ProductoFormResult debe tener estos campos:
+  //   final String? categoriaId;
+  //   final String? categoriaNombre;
   // ===========================================================================
   Future<void> crearProducto(
     ProductoFormResult r, {
     DescuentoDraft? descuento,
+    bool promoBannerEnabled = false,
   }) async {
     final doc = productosRef.doc();
     final id = doc.id;
@@ -188,7 +256,7 @@ class ProductosController {
       path = up['path']!;
     }
 
-    await doc.set({
+    final data = <String, dynamic>{
       'codigo': r.codigo.trim(),
       'nombre': r.nombre.trim(),
       'descripcion': r.descripcion.trim(),
@@ -204,9 +272,27 @@ class ProductosController {
       'activo': true,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    };
 
+    // ✅ categoría (solo si eligió una)
+    if (r.categoriaId != null && r.categoriaId!.trim().isNotEmpty) {
+      data['categoriaId'] = r.categoriaId!.trim();
+      data['categoriaNombre'] = (r.categoriaNombre ?? '').trim();
+    }
+
+    await doc.set(data);
+
+    // ✅ descuento
     await _upsertDescuento(productId: id, descuento: descuento);
+
+    // ✅ banner (usa url final)
+    await _syncBanner(
+      productoId: id,
+      titulo: r.nombre,
+      imagenUrl: url,
+      enabled: promoBannerEnabled,
+      descuento: descuento,
+    );
   }
 
   Future<void> actualizarProducto(
@@ -215,6 +301,7 @@ class ProductosController {
     String? existingImagenUrl,
     String? existingImagenPath,
     DescuentoDraft? descuento,
+    bool promoBannerEnabled = false,
   }) async {
     String url = existingImagenUrl ?? '';
     String path = existingImagenPath ?? '';
@@ -231,7 +318,7 @@ class ProductosController {
       path = up['path']!;
     }
 
-    await productosRef.doc(id).update({
+    final update = <String, dynamic>{
       'codigo': r.codigo.trim(),
       'nombre': r.nombre.trim(),
       'descripcion': r.descripcion.trim(),
@@ -245,9 +332,30 @@ class ProductosController {
       'almacenId': r.almacenId,
       'almacenNombre': r.almacenNombre,
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    };
 
+    // ✅ categoría: set o delete
+    if (r.categoriaId != null && r.categoriaId!.trim().isNotEmpty) {
+      update['categoriaId'] = r.categoriaId!.trim();
+      update['categoriaNombre'] = (r.categoriaNombre ?? '').trim();
+    } else {
+      update['categoriaId'] = FieldValue.delete();
+      update['categoriaNombre'] = FieldValue.delete();
+    }
+
+    await productosRef.doc(id).update(update);
+
+    // ✅ descuento
     await _upsertDescuento(productId: id, descuento: descuento);
+
+    // ✅ banner (usa url final)
+    await _syncBanner(
+      productoId: id,
+      titulo: r.nombre,
+      imagenUrl: url,
+      enabled: promoBannerEnabled,
+      descuento: descuento,
+    );
   }
 
   Future<void> eliminarProducto(String id, String? imagenPath) async {
@@ -257,6 +365,15 @@ class ProductosController {
     // opcional: borrar descuento
     try {
       await _descuentoActivoRef(id).delete();
+    } catch (_) {}
+
+    // opcional: marcar banner inactivo (o borrar)
+    try {
+      final ref = bannersRef.doc(id);
+      final snap = await ref.get();
+      if (snap.exists) {
+        await ref.set({'estado': 'INACTIVO'}, SetOptions(merge: true));
+      }
     } catch (_) {}
   }
 }
