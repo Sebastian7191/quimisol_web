@@ -1,23 +1,4 @@
 // lib/features/admin/pedidos/detalle_pedido.dart
-//
-// ✅ Modal / Ventana emergente bonita para ver detalle de un pedido
-// ✅ Visual pro (paleta rosa/morado), organizada por secciones
-// ✅ Scroll interno (no se corta)
-// ✅ Lista de items con miniaturas + subtotal
-//
-// ✅ PEDIDO (LO QUE PEDISTE):
-// - Ubicación: muestra DIRECCIÓN (no lat/lng)
-// - Cliente: muestra NOMBRE (no uid) -> se trae de /usuarios/{uid}
-// - “Pedido ID” ahora muestra el CÓDIGO del pedido
-// - Estado: si está en "pendiente" permite cambiar a "Aceptado"
-// - Permite editar "fecha_envio" (DateTime picker)
-// - Permite editar "costo_envio"
-// - Permite asignar repartidor del MISMO DEPARTAMENTO del pedido
-//   -> repartidores filtrados por almacenId (del pedido o por almacenes del depto)
-// - En dropdown de repartidor: SOLO NOMBRE (sin correo)
-//
-// Uso:
-// showPedidoDetalleDialog(context, pedidoData, pedidoId: doc.id);
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -34,6 +15,30 @@ Future<void> showPedidoDetalleDialog(
     barrierDismissible: true,
     builder: (_) => _PedidoDetalleDialog(pedido: pedido, pedidoId: pedidoId),
   );
+}
+
+/* ===================== ESTADOS (CANÓNICOS) ===================== */
+const String kEstadoPendiente = 'pendiente';
+const String kEstadoAceptado = 'aceptado';
+const String kEstadoEnCamino = 'en camino';
+const String kEstadoEntregado = 'entregado';
+const String kEstadoCancelado = 'cancelado';
+
+String normalizeEstado(dynamic v) {
+  final s = (v ?? '').toString().trim();
+  if (s.isEmpty) return kEstadoPendiente;
+  final low = s.toLowerCase().trim();
+
+  // Compatibilidad con valores viejos o variantes
+  if (low == 'aceptado' || s == 'Aceptado') return kEstadoAceptado;
+  if (low == 'en camino' || low == 'encamino' || low == 'en_camino') {
+    return kEstadoEnCamino;
+  }
+  if (low == 'pendiente') return kEstadoPendiente;
+  if (low == 'entregado') return kEstadoEntregado;
+  if (low == 'cancelado') return kEstadoCancelado;
+
+  return low; // fallback: conserva algo raro pero consistente
 }
 
 class _PedidoDetalleDialog extends StatefulWidget {
@@ -67,8 +72,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
 
   String get _codigo => (widget.pedido['codigo'] ?? '—').toString();
 
-  String get _estado =>
-      (widget.pedido['estado'] ?? 'pendiente').toString().toLowerCase().trim();
+  String get _estado => normalizeEstado(widget.pedido['estado']);
 
   String get _uidCliente => (widget.pedido['uid'] ?? '').toString().trim();
 
@@ -146,6 +150,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
       },
     );
     if (date == null) return;
+    if (!mounted) return; // ✅ evita warning async gap
 
     final time = await showTimePicker(
       context: context,
@@ -163,6 +168,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
         );
       },
     );
+    if (!mounted) return;
 
     final picked = DateTime(
       date.year,
@@ -187,22 +193,21 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
       return;
     }
 
-    // asegurar parse de costo
     _applyCostoFromText();
 
     setState(() => _saving = true);
     try {
       final updates = <String, dynamic>{};
 
-      // Estado: solo permitir pendiente -> Aceptado
-      if (_estado == 'pendiente' && (_estadoEdit ?? _estado) == 'Aceptado') {
-        updates['estado'] = 'Aceptado';
+      // ✅ Estado: solo permitir pendiente -> aceptado
+      final nuevoEstado = normalizeEstado(_estadoEdit ?? _estado);
+      if (_estado == kEstadoPendiente && nuevoEstado == kEstadoAceptado) {
+        updates['estado'] = kEstadoAceptado;
       }
 
       // Fecha envío
-      updates['fecha_envio'] = _fechaEnvioEdit == null
-          ? null
-          : Timestamp.fromDate(_fechaEnvioEdit!);
+      updates['fecha_envio'] =
+          _fechaEnvioEdit == null ? null : Timestamp.fromDate(_fechaEnvioEdit!);
 
       // Costo envío
       updates['costo_envio'] = (_costoEnvioEdit ?? 0);
@@ -226,8 +231,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
             .doc(_repartidorUidEdit)
             .get();
         final rep = repSnap.data() ?? {};
-        final repName = (rep['name'] ?? rep['nombre'] ?? 'Repartidor')
-            .toString();
+        final repName = (rep['name'] ?? rep['nombre'] ?? 'Repartidor').toString();
         await _pedidoRef!.update({'repartidorNombre': repName});
       }
 
@@ -248,8 +252,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
   @override
   Widget build(BuildContext context) {
     final total = _asDouble(widget.pedido['total']);
-    final costoEnvio =
-        _costoEnvioEdit ?? _asDouble(widget.pedido['costo_envio']);
+    final costoEnvio = _costoEnvioEdit ?? _asDouble(widget.pedido['costo_envio']);
     final totalFinal = total + costoEnvio;
 
     final createdText = _formatTs(widget.pedido['createdAt']);
@@ -257,13 +260,11 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
     final ubNombre = (_ubic['nombre'] ?? '').toString();
     final ubDireccion = (_ubic['direccion'] ?? '').toString();
 
-    final direccionFinal = _direccionPedido.isNotEmpty
-        ? _direccionPedido
-        : ubDireccion;
+    final direccionFinal =
+        _direccionPedido.isNotEmpty ? _direccionPedido : ubDireccion;
 
-    final itemsRaw = (widget.pedido['items'] is List)
-        ? (widget.pedido['items'] as List)
-        : [];
+    final itemsRaw =
+        (widget.pedido['items'] is List) ? (widget.pedido['items'] as List) : [];
     final items = itemsRaw
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
@@ -332,9 +333,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                createdText.isEmpty
-                                    ? '—'
-                                    : 'Creado: $createdText',
+                                createdText.isEmpty ? '—' : 'Creado: $createdText',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -350,9 +349,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                         _EstadoPill(estado: _estado),
                         IconButton(
                           tooltip: 'Cerrar',
-                          onPressed: _saving
-                              ? null
-                              : () => Navigator.pop(context),
+                          onPressed: _saving ? null : () => Navigator.pop(context),
                           icon: Icon(
                             Icons.close_rounded,
                             color: Colors.white.withValues(alpha: 0.92),
@@ -390,8 +387,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                   uid: _uidCliente,
                                   codigoPedido: _codigo,
                                   conteo:
-                                      (widget.pedido['conteoItems'] ??
-                                              items.length)
+                                      (widget.pedido['conteoItems'] ?? items.length)
                                           .toString(),
                                 ),
                               );
@@ -429,11 +425,10 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                   label: 'Estado',
                                   child: _EstadoEditor(
                                     estadoActual: _estado,
-                                    value: _estadoEdit ?? _estado,
+                                    value: normalizeEstado(_estadoEdit ?? _estado),
                                     onChanged: _saving
                                         ? null
-                                        : (v) =>
-                                              setState(() => _estadoEdit = v),
+                                        : (v) => setState(() => _estadoEdit = v),
                                   ),
                                 ),
                                 const SizedBox(height: 10),
@@ -450,22 +445,16 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                           ),
                                           decoration: BoxDecoration(
                                             color: Palette.fieldBg,
-                                            borderRadius: BorderRadius.circular(
-                                              14,
-                                            ),
+                                            borderRadius: BorderRadius.circular(14),
                                             border: Border.all(
-                                              color: Palette.ink.withValues(alpha: 
-                                                0.06,
-                                              ),
+                                              color: Palette.ink.withValues(alpha: 0.06),
                                             ),
                                           ),
                                           child: Text(
                                             _fechaEnvioEdit == null
                                                 ? '—'
-                                                : DateFormat(
-                                                    'dd/MM/yyyy HH:mm',
-                                                    'es_BO',
-                                                  ).format(_fechaEnvioEdit!),
+                                                : DateFormat('dd/MM/yyyy HH:mm', 'es_BO')
+                                                    .format(_fechaEnvioEdit!),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
@@ -477,28 +466,20 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                       ),
                                       const SizedBox(width: 10),
                                       OutlinedButton.icon(
-                                        onPressed: _saving
-                                            ? null
-                                            : _pickFechaEnvio,
-                                        icon: const Icon(
-                                          Icons.calendar_month_rounded,
-                                        ),
+                                        onPressed: _saving ? null : _pickFechaEnvio,
+                                        icon: const Icon(Icons.calendar_month_rounded),
                                         label: const Text('Editar'),
                                         style: OutlinedButton.styleFrom(
                                           foregroundColor: Palette.primary,
                                           side: BorderSide(
-                                            color: Palette.primary.withValues(alpha: 
-                                              0.30,
-                                            ),
+                                            color: Palette.primary.withValues(alpha: 0.30),
                                           ),
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 12,
                                             vertical: 12,
                                           ),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              14,
-                                            ),
+                                            borderRadius: BorderRadius.circular(14),
                                           ),
                                         ),
                                       ),
@@ -507,7 +488,6 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                 ),
                                 const SizedBox(height: 10),
 
-                                // ✅ Costo envío editable
                                 _EditRow(
                                   label: 'Costo envío',
                                   child: Container(
@@ -527,9 +507,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                         Icon(
                                           Icons.local_shipping_rounded,
                                           size: 18,
-                                          color: Palette.primary.withValues(alpha: 
-                                            0.8,
-                                          ),
+                                          color: Palette.primary.withValues(alpha: 0.8),
                                         ),
                                         const SizedBox(width: 10),
                                         Expanded(
@@ -538,19 +516,16 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                             enabled: !_saving,
                                             keyboardType:
                                                 const TextInputType.numberWithOptions(
-                                                  decimal: true,
-                                                  signed: false,
-                                                ),
-                                            onChanged: (_) =>
-                                                _applyCostoFromText(),
+                                              decimal: true,
+                                              signed: false,
+                                            ),
+                                            onChanged: (_) => _applyCostoFromText(),
                                             decoration: InputDecoration(
                                               hintText: '0.00',
                                               border: InputBorder.none,
                                               isDense: true,
                                               hintStyle: TextStyle(
-                                                color: Palette.ink.withValues(alpha: 
-                                                  0.45,
-                                                ),
+                                                color: Palette.ink.withValues(alpha: 0.45),
                                                 fontWeight: FontWeight.w800,
                                               ),
                                             ),
@@ -566,23 +541,16 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                             vertical: 8,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: Palette.button.withValues(alpha: 
-                                              0.28,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              14,
-                                            ),
+                                            color: Palette.button.withValues(alpha: 0.28),
+                                            borderRadius: BorderRadius.circular(14),
                                             border: Border.all(
-                                              color: Palette.primary
-                                                  .withValues(alpha: 0.10),
+                                              color: Palette.primary.withValues(alpha: 0.10),
                                             ),
                                           ),
                                           child: Text(
                                             'Bs',
                                             style: TextStyle(
-                                              color: Palette.ink.withValues(alpha: 
-                                                0.85,
-                                              ),
+                                              color: Palette.ink.withValues(alpha: 0.85),
                                               fontWeight: FontWeight.w900,
                                               fontSize: 12.5,
                                             ),
@@ -601,9 +569,8 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                     departamentoPedido: _deptoPedido,
                                     pedidoAlmacenId: _almacenIdPedido,
                                     valueUid: _repartidorUidEdit,
-                                    onChanged: (uid) => setState(
-                                      () => _repartidorUidEdit = uid,
-                                    ),
+                                    onChanged: (uid) =>
+                                        setState(() => _repartidorUidEdit = uid),
                                   ),
                                 ),
                               ],
@@ -612,15 +579,11 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
 
                           const SizedBox(height: 14),
 
-                          // ===== ITEMS =====
                           _SectionCard(
                             title: 'Productos',
                             icon: Icons.shopping_bag_rounded,
                             trailing: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
                                 color: Palette.button.withValues(alpha: 0.28),
                                 borderRadius: BorderRadius.circular(999),
@@ -638,17 +601,13 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                               ),
                             ),
                             child: items.isEmpty
-                                ? const _EmptyBox(
-                                    text: 'No hay items en este pedido.',
-                                  )
+                                ? const _EmptyBox(text: 'No hay items en este pedido.')
                                 : Column(
                                     children: [
                                       for (int i = 0; i < items.length; i++)
                                         Padding(
                                           padding: EdgeInsets.only(
-                                            bottom: i == items.length - 1
-                                                ? 0
-                                                : 10,
+                                            bottom: i == items.length - 1 ? 0 : 10,
                                           ),
                                           child: _ItemTile(item: items[i]),
                                         ),
@@ -658,7 +617,6 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
 
                           const SizedBox(height: 14),
 
-                          // ===== TOTALS (con costo envío ya editado) =====
                           _SectionCard(
                             title: 'Totales',
                             icon: Icons.calculate_rounded,
@@ -666,11 +624,7 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                               rows: [
                                 _KV('Total productos', _money(total)),
                                 _KV('Costo envío', _money(costoEnvio)),
-                                _KV(
-                                  'Total final',
-                                  _money(totalFinal),
-                                  isStrong: true,
-                                ),
+                                _KV('Total final', _money(totalFinal), isStrong: true),
                               ],
                             ),
                           ),
@@ -704,18 +658,11 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                         ),
                         const SizedBox(width: 10),
                         OutlinedButton(
-                          onPressed: _saving
-                              ? null
-                              : () => Navigator.pop(context),
+                          onPressed: _saving ? null : () => Navigator.pop(context),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Palette.primary,
-                            side: BorderSide(
-                              color: Palette.primary.withValues(alpha: 0.25),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
+                            side: BorderSide(color: Palette.primary.withValues(alpha: 0.25)),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
@@ -735,16 +682,11 @@ class _PedidoDetalleDialogState extends State<_PedidoDetalleDialog> {
                                   ),
                                 )
                               : const Icon(Icons.save_rounded),
-                          label: Text(
-                            _saving ? 'Guardando…' : 'Guardar cambios',
-                          ),
+                          label: Text(_saving ? 'Guardando…' : 'Guardar cambios'),
                           style: FilledButton.styleFrom(
                             backgroundColor: Palette.primary,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
@@ -896,10 +838,7 @@ class _EntregaInfo extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            pill(
-              departamento.isEmpty ? '—' : departamento,
-              icon: Icons.map_rounded,
-            ),
+            pill(departamento.isEmpty ? '—' : departamento, icon: Icons.map_rounded),
             if (ubNombre.isNotEmpty) pill(ubNombre, icon: Icons.home_rounded),
           ],
         ),
@@ -926,11 +865,7 @@ class _ClienteInfo extends StatelessWidget {
         rows: [
           const _KV('Nombre', '—'),
           const _KV('Email', '—'),
-          _KV(
-            'Pedido',
-            codigoPedido.isEmpty ? '—' : '#$codigoPedido',
-            isStrong: true,
-          ),
+          _KV('Pedido', codigoPedido.isEmpty ? '—' : '#$codigoPedido', isStrong: true),
           _KV('Conteo Productos', conteo),
         ],
       );
@@ -945,9 +880,7 @@ class _ClienteInfo extends StatelessWidget {
         if (snap.connectionState == ConnectionState.waiting) {
           nombre = 'Cargando…';
           email = '…';
-        } else if (snap.hasData &&
-            snap.data != null &&
-            snap.data!.data() != null) {
+        } else if (snap.hasData && snap.data?.data() != null) {
           final u = snap.data!.data()!;
           nombre = (u['name'] ?? u['nombre'] ?? 'Cliente').toString();
           email = (u['email'] ?? '—').toString();
@@ -957,11 +890,7 @@ class _ClienteInfo extends StatelessWidget {
           rows: [
             _KV('Nombre', nombre),
             _KV('Email', email),
-            _KV(
-              'Pedido',
-              codigoPedido.isEmpty ? '—' : '#$codigoPedido',
-              isStrong: true,
-            ),
+            _KV('Pedido', codigoPedido.isEmpty ? '—' : '#$codigoPedido', isStrong: true),
             _KV('Conteo Productos', conteo),
           ],
         );
@@ -1020,21 +949,21 @@ class _EstadoEditor extends StatelessWidget {
     final ink = Palette.ink;
 
     final options = <String>[
-      estadoActual,
-      if (estadoActual == 'pendiente') 'Aceptado',
+      normalizeEstado(estadoActual),
+      if (normalizeEstado(estadoActual) == kEstadoPendiente) kEstadoAceptado,
     ].toSet().toList();
 
     String label(String v) {
-      switch (v) {
-        case 'Aceptado':
+      switch (normalizeEstado(v)) {
+        case kEstadoAceptado:
           return 'Aceptado';
-        case 'pendiente':
+        case kEstadoPendiente:
           return 'Pendiente';
-        case 'en camino':
+        case kEstadoEnCamino:
           return 'En camino';
-        case 'entregado':
+        case kEstadoEntregado:
           return 'Entregado';
-        case 'cancelado':
+        case kEstadoCancelado:
           return 'Cancelado';
         default:
           return v;
@@ -1055,27 +984,19 @@ class _EstadoEditor extends StatelessWidget {
           isExpanded: true,
           dropdownColor: Palette.white,
           borderRadius: BorderRadius.circular(14),
-          icon: Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: ink.withValues(alpha: 0.55),
-          ),
-          style: TextStyle(
-            color: ink,
-            fontWeight: FontWeight.w900,
-            fontSize: 12.8,
-          ),
+          icon: Icon(Icons.keyboard_arrow_down_rounded, color: ink.withValues(alpha: 0.55)),
+          style: TextStyle(color: ink, fontWeight: FontWeight.w900, fontSize: 12.8),
           onChanged: onChanged == null ? null : (v) => onChanged!(v ?? value),
           items: options
-              .map(
-                (e) =>
-                    DropdownMenuItem<String>(value: e, child: Text(label(e))),
-              )
+              .map((e) => DropdownMenuItem<String>(value: e, child: Text(label(e))))
               .toList(growable: false),
         ),
       ),
     );
   }
 }
+
+/* ===================== REPARTIDOR PICKER (igual que tu lógica) ===================== */
 
 class _RepartidorPicker extends StatelessWidget {
   const _RepartidorPicker({
@@ -1088,7 +1009,7 @@ class _RepartidorPicker extends StatelessWidget {
 
   final bool enabled;
   final String departamentoPedido;
-  final String pedidoAlmacenId; // puede venir vacío
+  final String pedidoAlmacenId;
   final String? valueUid;
   final ValueChanged<String?> onChanged;
 
@@ -1102,7 +1023,7 @@ class _RepartidorPicker extends StatelessWidget {
         .collection('almacenes')
         .where('departamento', isEqualTo: depto)
         .where('activo', isEqualTo: true)
-        .limit(10) // whereIn max 10
+        .limit(10)
         .get();
 
     return q.docs.map((d) => d.id).toList();
@@ -1132,18 +1053,17 @@ class _RepartidorPicker extends StatelessWidget {
         final ids = snapIds.data ?? [];
         if (ids.isEmpty) {
           return _WarnBox(
-            text:
-                'No se encontraron almacenes activos para "$departamentoPedido".',
+            text: 'No se encontraron almacenes activos para "$departamentoPedido".',
           );
         }
 
         final Query<Map<String, dynamic>> repQuery = (ids.length == 1)
             ? FirebaseFirestore.instance
-                  .collection('repartidores')
-                  .where('almacenId', isEqualTo: ids.first)
+                .collection('repartidores')
+                .where('almacenId', isEqualTo: ids.first)
             : FirebaseFirestore.instance
-                  .collection('repartidores')
-                  .where('almacenId', whereIn: ids);
+                .collection('repartidores')
+                .where('almacenId', whereIn: ids);
 
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: repQuery.snapshots(),
@@ -1152,9 +1072,7 @@ class _RepartidorPicker extends StatelessWidget {
               return _ghostField('Cargando repartidores…', ink);
             }
             if (snap.hasError) {
-              return _WarnBox(
-                text: 'Error cargando repartidores: ${snap.error}',
-              );
+              return _WarnBox(text: 'Error cargando repartidores: ${snap.error}');
             }
 
             final docs = snap.data?.docs ?? [];
@@ -1165,8 +1083,7 @@ class _RepartidorPicker extends StatelessWidget {
               return _WarnBox(text: 'No hay repartidores $extra.');
             }
 
-            final exists =
-                valueUid != null && docs.any((d) => d.id == valueUid);
+            final exists = valueUid != null && docs.any((d) => d.id == valueUid);
             final current = exists ? valueUid : null;
 
             return Container(
@@ -1183,15 +1100,8 @@ class _RepartidorPicker extends StatelessWidget {
                   isExpanded: true,
                   dropdownColor: Palette.white,
                   borderRadius: BorderRadius.circular(14),
-                  icon: Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: ink.withValues(alpha: 0.55),
-                  ),
-                  style: TextStyle(
-                    color: ink,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12.8,
-                  ),
+                  icon: Icon(Icons.keyboard_arrow_down_rounded, color: ink.withValues(alpha: 0.55)),
+                  style: TextStyle(color: ink, fontWeight: FontWeight.w900, fontSize: 12.8),
                   onChanged: enabled ? (v) => onChanged(v) : null,
                   hint: Text(
                     'Seleccionar repartidor…',
@@ -1207,15 +1117,10 @@ class _RepartidorPicker extends StatelessWidget {
                     ),
                     ...docs.map((d) {
                       final r = d.data();
-                      final name = (r['name'] ?? r['nombre'] ?? 'Repartidor')
-                          .toString();
+                      final name = (r['name'] ?? r['nombre'] ?? 'Repartidor').toString();
                       return DropdownMenuItem<String?>(
                         value: d.id,
-                        child: Text(
-                          name, // ✅ SOLO NOMBRE
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
                       );
                     }),
                   ],
@@ -1249,7 +1154,7 @@ class _RepartidorPicker extends StatelessWidget {
   }
 }
 
-/* ===================== ITEMS ===================== */
+/* ===================== ITEMS / UI / HELPERS (TU MISMO CÓDIGO) ===================== */
 
 class _ItemTile extends StatelessWidget {
   const _ItemTile({required this.item});
@@ -1363,10 +1268,7 @@ class _Thumb extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: url.isEmpty
-            ? Icon(
-                Icons.image_not_supported_rounded,
-                color: Palette.primary.withValues(alpha: 0.6),
-              )
+            ? Icon(Icons.image_not_supported_rounded, color: Palette.primary.withValues(alpha: 0.6))
             : Image.network(
                 url,
                 fit: BoxFit.cover,
@@ -1379,8 +1281,6 @@ class _Thumb extends StatelessWidget {
     );
   }
 }
-
-/* ===================== LISTS / BOXES ===================== */
 
 class _KeyValueList extends StatelessWidget {
   const _KeyValueList({required this.rows});
@@ -1422,9 +1322,7 @@ class _KeyValueList extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: ink,
-                      fontWeight: rows[i].isStrong
-                          ? FontWeight.w900
-                          : FontWeight.w800,
+                      fontWeight: rows[i].isStrong ? FontWeight.w900 : FontWeight.w800,
                       fontSize: rows[i].isStrong ? 13.5 : 12.5,
                     ),
                   ),
@@ -1509,23 +1407,23 @@ class _WarnBox extends StatelessWidget {
   }
 }
 
-/* ===================== ESTADO CHIP ===================== */
+/* ===================== ESTADO CHIP HEADER ===================== */
 
 class _EstadoPill extends StatelessWidget {
   const _EstadoPill({required this.estado});
   final String estado;
 
   String _label(String s) {
-    switch (s) {
-      case 'entregado':
+    switch (normalizeEstado(s)) {
+      case kEstadoEntregado:
         return 'Entregado';
-      case 'cancelado':
+      case kEstadoCancelado:
         return 'Cancelado';
-      case 'en camino':
+      case kEstadoEnCamino:
         return 'En camino';
-      case 'Aceptado':
+      case kEstadoAceptado:
         return 'Aceptado';
-      case 'pendiente':
+      case kEstadoPendiente:
       default:
         return 'Pendiente';
     }
@@ -1533,8 +1431,9 @@ class _EstadoPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _statusColor(estado);
-    final label = _label(estado);
+    final st = normalizeEstado(estado);
+    final c = _statusColor(st);
+    final label = _label(st);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1546,7 +1445,7 @@ class _EstadoPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(_statusIcon(estado), size: 16, color: Colors.white),
+          Icon(_statusIcon(st), size: 16, color: Colors.white),
           const SizedBox(width: 8),
           Text(
             label,
@@ -1565,32 +1464,32 @@ class _EstadoPill extends StatelessWidget {
   }
 
   Color _statusColor(String s) {
-    switch (s) {
-      case 'entregado':
+    switch (normalizeEstado(s)) {
+      case kEstadoEntregado:
         return Palette.statsSuccess;
-      case 'cancelado':
+      case kEstadoCancelado:
         return Palette.statsDanger;
-      case 'en camino':
+      case kEstadoEnCamino:
         return Palette.statsWarning;
-      case 'Aceptado':
+      case kEstadoAceptado:
         return Palette.secondary;
-      case 'pendiente':
+      case kEstadoPendiente:
       default:
         return Palette.primary;
     }
   }
 
   IconData _statusIcon(String s) {
-    switch (s) {
-      case 'entregado':
+    switch (normalizeEstado(s)) {
+      case kEstadoEntregado:
         return Icons.check_circle_rounded;
-      case 'cancelado':
+      case kEstadoCancelado:
         return Icons.cancel_rounded;
-      case 'en camino':
+      case kEstadoEnCamino:
         return Icons.local_shipping_rounded;
-      case 'Aceptado':
+      case kEstadoAceptado:
         return Icons.verified_rounded;
-      case 'pendiente':
+      case kEstadoPendiente:
       default:
         return Icons.schedule_rounded;
     }
@@ -1622,19 +1521,16 @@ String _moneyNoSuffix(double v) {
 }
 
 double _parseMoney(String raw) {
-  // admite "1.234,50" o "1234.50"
   final s = raw
       .replaceAll('Bs', '')
       .replaceAll('bs', '')
       .replaceAll(' ', '')
       .trim();
   if (s.isEmpty) return 0;
-  // si tiene coma y punto, asumimos formato es: "." miles, "," decimal
   if (s.contains(',') && s.contains('.')) {
     final normalized = s.replaceAll('.', '').replaceAll(',', '.');
     return double.tryParse(normalized) ?? 0;
   }
-  // si solo tiene coma, la tratamos como decimal
   if (s.contains(',') && !s.contains('.')) {
     return double.tryParse(s.replaceAll(',', '.')) ?? 0;
   }
