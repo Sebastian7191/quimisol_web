@@ -21,13 +21,12 @@ class AlmacenesPage extends StatefulWidget {
 class _AlmacenesPageState extends State<AlmacenesPage> {
   final controller = AlmacenesController();
 
-  /// IMPRIMIR LINK ÍNDICE EN CONSOLA
-
+  // IMPRIMIR LINK ÍNDICE EN CONSOLA
   void _printFirestoreIndexLink(Object error) {
     controller.printFirestoreIndexLink(error);
   }
 
-  /// Todo pal controller
+  // Todo pal controller
   Future<void> _guardarAlmacenFirestore({
     required String nombre,
     required String departamento,
@@ -74,7 +73,7 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
     }
   }
 
-  /// Streams delegados al controller
+  // Streams delegados al controller
   Stream<QuerySnapshot<Map<String, dynamic>>> _almacenesStream() =>
       controller.almacenesStream();
 

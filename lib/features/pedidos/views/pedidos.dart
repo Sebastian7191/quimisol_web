@@ -21,6 +21,11 @@ import 'package:quimisol_web/core/theme/palette.dart';
 
 import 'package:quimisol_web/features/pedidos/views/detalle_pedido.dart';
 
+import '../controllers/pedidos_controller.dart';
+import '../data/pedido_row.dart';
+import 'widgets/micro_widgets.dart';
+import 'widgets/stagger_in.dart';
+
 class PedidosPage extends StatefulWidget {
   const PedidosPage({super.key});
 
@@ -33,6 +38,8 @@ class _PedidosPageState extends State<PedidosPage>
   final _searchCtrl = TextEditingController();
   String _q = '';
   String _estado = 'Todos';
+
+  final controller = PedidosController();
 
   late final AnimationController _bgCtrl;
 
@@ -60,28 +67,7 @@ class _PedidosPageState extends State<PedidosPage>
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _pedidosStream() {
-    return FirebaseFirestore.instance
-        .collection('pedidos')
-        .orderBy('createdAt', descending: true)
-        .snapshots();
-  }
-
-  bool _matches(Map<String, dynamic> p) {
-    final estado = (p['estado'] ?? '').toString().toLowerCase();
-    if (_estado != 'Todos' && estado != _estado) return false;
-
-    if (_q.isEmpty) return true;
-    final q = _q.toLowerCase();
-
-    final codigo = (p['codigo'] ?? '').toString().toLowerCase();
-    final direccion = (p['direccion'] ?? '').toString().toLowerCase();
-    final uid = (p['uid'] ?? '').toString().toLowerCase();
-    final depto = (p['departamento'] ?? '').toString().toLowerCase();
-
-    return codigo.contains(q) ||
-        direccion.contains(q) ||
-        uid.contains(q) ||
-        depto.contains(q);
+    return controller.pedidosStream();
   }
 
   @override
@@ -111,44 +97,28 @@ class _PedidosPageState extends State<PedidosPage>
                   );
                 }
                 if (snap.connectionState == ConnectionState.waiting) {
-                  return const _LoadingFancy(text: 'Cargando pedidos…');
+                  return const LoadingFancy(text: 'Cargando pedidos…');
                 }
 
                 final docs = snap.data?.docs ?? [];
-                final filtered = docs.where((d) => _matches(d.data())).toList();
+
+                final idToDoc = {for (final d in docs) d.id: d};
+
+                final pedidos = docs
+                    .map((d) => controller.parsePedidoRow(d))
+                    .toList();
+
+                final filtered = controller.filterPedidos(
+                  pedidos: pedidos,
+                  query: _q,
+                  estado: _estado,
+                );
 
                 if (filtered.isEmpty) {
-                  return _EmptyState(query: _q, estado: _estado);
+                  return EmptyState(query: _q, estado: _estado);
                 }
 
-                // ✅ agrupar por departamento
-                final Map<
-                  String,
-                  List<QueryDocumentSnapshot<Map<String, dynamic>>>
-                >
-                byDepto = {};
-                for (final d in filtered) {
-                  final data = d.data();
-                  final depto = (data['departamento'] ?? 'Sin departamento')
-                      .toString()
-                      .trim();
-                  final key = depto.isEmpty ? 'Sin departamento' : depto;
-                  (byDepto[key] ??= []).add(d);
-                }
-
-                // ✅ ordenar departamentos alfabético (y Sin departamento al final)
-                final deptos = byDepto.keys.toList()
-                  ..sort((a, b) {
-                    if (a == 'Sin departamento') return 1;
-                    if (b == 'Sin departamento') return -1;
-                    return a.toLowerCase().compareTo(b.toLowerCase());
-                  });
-
-                final sections = <_DeptoSection>[];
-                for (final depto in deptos) {
-                  final list = byDepto[depto]!;
-                  sections.add(_DeptoSection(departamento: depto, docs: list));
-                }
+                final sections = controller.groupByDepartamento(filtered);
 
                 return Column(
                   children: [
@@ -164,9 +134,9 @@ class _PedidosPageState extends State<PedidosPage>
                             ),
                           ),
                           const SizedBox(width: 8),
-                          _CountPill(count: filtered.length),
+                          CountPill(count: filtered.length),
                           const Spacer(),
-                          const _HintPill(
+                          const HintPill(
                             text: 'Toca un pedido para ver detalle',
                           ),
                         ],
@@ -182,28 +152,31 @@ class _PedidosPageState extends State<PedidosPage>
                             padding: const EdgeInsets.only(bottom: 14),
                             child: _DeptoBlock(
                               title: s.departamento,
-                              count: s.docs.length,
-                              children: List.generate(s.docs.length, (idx) {
-                                final d = s.docs[idx];
+                              count: s.pedidos.length,
+                              children: List.generate(s.pedidos.length, (idx) {
+                                final p = s.pedidos[idx];
                                 final delay = math.min(420, (idx + i) * 18);
-                                return _StaggerIn(
+                                return StaggerIn(
                                   delayMs: delay,
                                   child: Padding(
                                     padding: EdgeInsets.only(
-                                      bottom: idx == s.docs.length - 1 ? 0 : 10,
+                                      bottom: idx == s.pedidos.length - 1
+                                          ? 0
+                                          : 10,
                                     ),
                                     child: _PedidoCard(
-                                      doc: d,
+                                      pedido: p,
                                       onTap: () async {
-                                        final data = d.data();
+                                        final doc = idToDoc[p.id];
+                                        if (doc == null) return;
 
+                                        //cambio aquí
                                         await showPedidoDetalleDialog(
                                           context,
-                                          data,
-                                          pedidoId: d.id,
+                                          doc.id,
                                         );
 
-                                        // ✅ fuerza refresco visual al volver del modal
+                                        // fuerza refresco visual al volver del modal
                                         if (mounted) setState(() {});
                                       },
                                     ),
@@ -348,7 +321,10 @@ class _PedidosHeader extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Row(
                     children: [
-                      Icon(Icons.search_rounded, color: ink.withValues(alpha: 0.45)),
+                      Icon(
+                        Icons.search_rounded,
+                        color: ink.withValues(alpha: 0.45),
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: TextField(
@@ -488,12 +464,6 @@ class _EstadoFilterMini extends StatelessWidget {
 
 /* ================= SECCIONES POR DEPTO ================= */
 
-class _DeptoSection {
-  final String departamento;
-  final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs;
-  const _DeptoSection({required this.departamento, required this.docs});
-}
-
 class _DeptoBlock extends StatelessWidget {
   const _DeptoBlock({
     required this.title,
@@ -527,7 +497,9 @@ class _DeptoBlock extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Palette.button.withValues(alpha: 0.26),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Palette.primary.withValues(alpha: 0.10)),
+                  border: Border.all(
+                    color: Palette.primary.withValues(alpha: 0.10),
+                  ),
                 ),
                 child: const Icon(
                   Icons.map_rounded,
@@ -578,32 +550,29 @@ class _DeptoBlock extends StatelessWidget {
 /* ================= CARD PEDIDO ================= */
 
 class _PedidoCard extends StatelessWidget {
-  const _PedidoCard({required this.doc, required this.onTap});
-  final QueryDocumentSnapshot<Map<String, dynamic>> doc;
+  const _PedidoCard({required this.pedido, required this.onTap});
+
+  final PedidoRow pedido;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final data = doc.data();
+    final p = pedido;
     final ink = Palette.ink;
 
-    final codigo = (data['codigo'] ?? '—').toString();
-    final estado = (data['estado'] ?? 'pendiente').toString().toLowerCase();
+    final codigo = p.codigo.isEmpty ? '—' : p.codigo;
+    final estado = p.estado;
 
-    final direccion = (data['direccion'] ?? '').toString();
-    final depto = (data['departamento'] ?? '').toString();
-    final conteo = (data['conteoItems'] is num)
-        ? (data['conteoItems'] as num).toInt()
-        : 0;
+    final direccion = p.direccion;
+    final depto = p.departamento;
+    final conteo = p.conteoItems;
 
-    final total = _asDouble(data['total']);
-    final envio = _asDouble(data['costo_envio']);
-    final totalFinal = total + envio;
+    //final totalFinal = p.totalFinal;
 
-    final createdAt = data['createdAt'];
-    final fecha = _formatTs(createdAt);
+    final fecha = p.fechaLabel;
+    final totalLabel = p.totalLabel;
 
-    final c = _statusColor(estado);
+    final c = statusColor(estado);
 
     return Material(
       color: Palette.fieldBg,
@@ -643,7 +612,7 @@ class _PedidoCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        _EstadoChip(estado: estado),
+                        EstadoChip(estado: estado),
                         const Spacer(),
                         Text(
                           fecha.isEmpty ? '—' : fecha,
@@ -672,336 +641,26 @@ class _PedidoCard extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 6,
                       children: [
-                        _miniPill(
+                        miniPill(
                           Icons.map_rounded,
                           depto.isEmpty ? '—' : depto,
                         ),
-                        _miniPill(Icons.shopping_bag_rounded, 'Items: $conteo'),
-                        _miniPill(Icons.payments_rounded, _money(totalFinal)),
+                        miniPill(Icons.shopping_bag_rounded, 'Items: $conteo'),
+                        miniPill(Icons.payments_rounded, totalLabel),
                       ],
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 10),
-              Icon(Icons.chevron_right_rounded, color: ink.withValues(alpha: 0.35)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _miniPill(IconData icon, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Palette.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Palette.ink.withValues(alpha: 0.06)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: Palette.primary),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: TextStyle(
-              color: Palette.ink.withValues(alpha: 0.72),
-              fontWeight: FontWeight.w800,
-              fontSize: 11.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _statusColor(String s) {
-    switch (s) {
-      case 'entregado':
-        return Palette.statsSuccess;
-      case 'cancelado':
-        return Palette.statsDanger;
-      case 'en camino':
-        return Palette.statsWarning;
-        case 'Aceptado':
-        return Palette.statsSuccess;
-      case 'pendiente':
-      default:
-        return Palette.primary;
-    }
-  }
-}
-
-class _EstadoChip extends StatelessWidget {
-  const _EstadoChip({required this.estado});
-  final String estado;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = _statusColor(estado);
-    final label = _label(estado);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: c.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: c.withValues(alpha: 0.28)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: Palette.ink.withValues(alpha: 0.9),
-          fontWeight: FontWeight.w900,
-          fontSize: 11.5,
-        ),
-      ),
-    );
-  }
-
-  String _label(String s) {
-    switch (s) {
-      case 'entregado':
-        return 'Entregado';
-      case 'cancelado':
-        return 'Cancelado';
-      case 'en camino':
-        return 'En camino';
-      case 'Aceptado':
-        return 'Aceptado';
-      case 'pendiente':
-      default:
-        return 'Pendiente';
-    }
-  }
-
-  Color _statusColor(String s) {
-    switch (s) {
-      case 'entregado':
-        return Palette.statsSuccess;
-      case 'cancelado':
-        return Palette.statsDanger;
-      case 'en camino':
-        return Palette.statsWarning;
-      case 'pendiente':
-      default:
-        return Palette.primary;
-    }
-  }
-}
-
-/* ================= MICRO UI ================= */
-
-class _CountPill extends StatelessWidget {
-  const _CountPill({required this.count});
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final ink = Palette.ink;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Palette.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: ink.withValues(alpha: 0.06)),
-      ),
-      child: Text(
-        '$count',
-        style: TextStyle(
-          color: ink,
-          fontWeight: FontWeight.w900,
-          fontSize: 12.5,
-        ),
-      ),
-    );
-  }
-}
-
-class _HintPill extends StatelessWidget {
-  const _HintPill({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final ink = Palette.ink;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Palette.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: ink.withValues(alpha: 0.06)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: ink.withValues(alpha: 0.55),
-          fontWeight: FontWeight.w800,
-          fontSize: 11.5,
-        ),
-      ),
-    );
-  }
-}
-
-class _LoadingFancy extends StatelessWidget {
-  const _LoadingFancy({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final ink = Palette.ink;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(
-            height: 34,
-            width: 34,
-            child: CircularProgressIndicator(strokeWidth: 3),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            text,
-            style: TextStyle(
-              color: ink.withValues(alpha: 0.6),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.query, required this.estado});
-  final String query;
-  final String estado;
-
-  @override
-  Widget build(BuildContext context) {
-    final ink = Palette.ink;
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Palette.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: ink.withValues(alpha: 0.06)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
               Icon(
-                Icons.search_off_rounded,
-                size: 44,
+                Icons.chevron_right_rounded,
                 color: ink.withValues(alpha: 0.35),
               ),
-              const SizedBox(height: 10),
-              Text(
-                'Sin resultados',
-                style: TextStyle(
-                  color: ink,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Estado: $estado${query.isEmpty ? '' : ' • "$query"'}',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: ink.withValues(alpha: 0.55),
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
             ],
           ),
         ),
       ),
     );
   }
-}
-
-/* ================= STAGGER ================= */
-
-class _StaggerIn extends StatefulWidget {
-  const _StaggerIn({required this.child, required this.delayMs});
-  final Widget child;
-  final int delayMs;
-
-  @override
-  State<_StaggerIn> createState() => _StaggerInState();
-}
-
-class _StaggerInState extends State<_StaggerIn>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c;
-  late final Animation<double> _fade;
-  late final Animation<Offset> _slide;
-
-  @override
-  void initState() {
-    super.initState();
-    _c = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 420),
-    );
-    _fade = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
-    _slide = Tween<Offset>(
-      begin: const Offset(0, 0.06),
-      end: Offset.zero,
-    ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(_c);
-
-    Future.delayed(Duration(milliseconds: widget.delayMs), () {
-      if (mounted) _c.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fade,
-      child: SlideTransition(position: _slide, child: widget.child),
-    );
-  }
-}
-
-/* ================= HELPERS ================= */
-
-double _asDouble(dynamic v) {
-  if (v == null) return 0.0;
-  if (v is num) return v.toDouble();
-  return double.tryParse(v.toString()) ?? 0.0;
-}
-
-String _money(double v) {
-  // Si quieres sin decimales, cambia aquí
-  final s = v.toStringAsFixed(2);
-  return '$s Bs';
-}
-
-String _formatTs(dynamic ts) {
-  try {
-    if (ts is Timestamp) {
-      final d = ts.toDate();
-      String two(int n) => n.toString().padLeft(2, '0');
-      return '${two(d.day)}/${two(d.month)}/${d.year} ${two(d.hour)}:${two(d.minute)}';
-    }
-  } catch (_) {}
-  return '';
 }
