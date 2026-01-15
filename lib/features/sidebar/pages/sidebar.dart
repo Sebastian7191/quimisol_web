@@ -14,7 +14,8 @@ import 'package:flutter_modular/flutter_modular.dart';
 import 'package:quimisol_web/core/theme/palette.dart';
 
 import 'package:quimisol_web/features/almacenes/views/almacenes.dart';
-import 'package:quimisol_web/features/home/pages/dashboard.dart';
+import 'package:quimisol_web/features/home/views/dashboard_page.dart';
+
 import 'package:quimisol_web/features/pedidos/views/pedidos.dart';
 import 'package:quimisol_web/features/productos/views/productos.dart';
 import 'package:quimisol_web/features/unidades/views/unidades.dart';
