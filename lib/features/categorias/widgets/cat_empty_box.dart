@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:quimisol_web/core/theme/palette.dart';
 
-class EmptyBox extends StatelessWidget {
+class CategoriasEmptyBox extends StatelessWidget {
   final String title;
   final String subtitle;
-  final IconData icon;
 
-  const EmptyBox({
+  const CategoriasEmptyBox({
     super.key,
     required this.title,
     required this.subtitle,
-    required this.icon,
   });
 
   @override
@@ -28,20 +26,25 @@ class EmptyBox extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              icon,
+              Icons.category_rounded,
               size: 44,
               color: Palette.primary.withValues(alpha: 0.85),
             ),
             const SizedBox(height: 10),
             Text(
               title,
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+              ),
             ),
             const SizedBox(height: 6),
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Palette.ink.withValues(alpha: 0.75)),
+              style: TextStyle(
+                color: Palette.ink.withValues(alpha: 0.75),
+              ),
             ),
           ],
         ),

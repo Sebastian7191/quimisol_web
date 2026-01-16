@@ -1,43 +1,21 @@
-// lib/features/admin/pedidos/detalle_pedido.dart
-//
-// ✅ Modal / Ventana emergente bonita para ver detalle de un pedido
-// ✅ Visual pro (paleta rosa/morado), organizada por secciones
-// ✅ Scroll interno (no se corta)
-// ✅ Lista de items con miniaturas + subtotal
-//
-// ✅ PEDIDO (LO QUE PEDISTE):
-// - Ubicación: muestra DIRECCIÓN (no lat/lng)
-// - Cliente: muestra NOMBRE (no uid) -> se trae de /usuarios/{uid}
-// - “Pedido ID” ahora muestra el CÓDIGO del pedido
-// - Estado: si está en "pendiente" permite cambiar a "Aceptado"
-// - Permite editar "fecha_envio" (DateTime picker)
-// - Permite editar "costo_envio"
-// - Permite asignar repartidor del MISMO DEPARTAMENTO del pedido
-//   -> repartidores filtrados por almacenId (del pedido o por almacenes del depto)
-// - En dropdown de repartidor: SOLO NOMBRE (sin correo)
-//
-// Uso:
-// showPedidoDetalleDialog(context, pedidoData, pedidoId: doc.id);
-
-// lib/features/pedidos/views/detalle_pedido.dart
-// UI-only dialog for pedido detalle. All data/logic is in controller/data.
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:quimisol_web/core/constants/pedido_estado.dart';
 import 'package:quimisol_web/core/theme/palette.dart';
 
 import '../controllers/detalle_controller.dart';
 import '../data/detalle_data.dart';
-import '../data/repartidor_option.dart';
+import '../data/pedido_item.dart';
 
+import 'widgets/detalle_widgets/edit_row.dart';
 import 'widgets/detalle_widgets/empty_box.dart';
-import 'widgets/detalle_widgets/entrega_info.dart';
-import 'widgets/detalle_widgets/estado_editor.dart';
-import 'widgets/detalle_widgets/estado_pill.dart';
+import 'widgets/detalle_widgets/footer_detalle.dart';
+import 'widgets/detalle_widgets/header_detalle.dart';
+import 'widgets/detalle_widgets/repartidor_picker.dart';
 import 'widgets/detalle_widgets/section_card.dart';
-import 'widgets/detalle_widgets/warn_box.dart';
+import 'widgets/detalle_widgets/entrega_info.dart';
 
-// Exclusivamente con pedidoId.
+// Abre diálogo de detalle exclusivamente con pedidoId.
 Future<void> showPedidoDetalleDialog(
   BuildContext context,
   String pedidoId, {
@@ -85,13 +63,14 @@ class _PedidoDetalleDialog extends StatelessWidget {
                     return SizedBox(
                       height: 240,
                       child: Center(
-                        child: Text('Error cargando pedido: \\${snap.error}'),
+                        child: Text('Error cargando pedido: ${snap.error}'),
                       ),
                     );
                   }
-                  final data = snap.data!;
+
+                  final pedido = snap.data!;
                   return _PedidoDetalleForm(
-                    pedido: data,
+                    pedido: pedido,
                     controller: controller,
                   );
                 },
@@ -117,21 +96,22 @@ class _PedidoDetalleForm extends StatefulWidget {
 class _PedidoDetalleFormState extends State<_PedidoDetalleForm> {
   bool _saving = false;
 
-  // editable local state
+  // Editable local state
   late String _estadoEdit;
   DateTime? _fechaEnvioEdit;
   double? _costoEnvioEdit;
   String? _repartidorUidEdit;
+  String? _repartidorNombreEdit;
   late TextEditingController _costoCtrl;
 
   @override
   void initState() {
     super.initState();
-
-    _estadoEdit = widget.pedido.estado;
+    _estadoEdit = normalizeEstado(widget.pedido.estado);
     _fechaEnvioEdit = widget.pedido.fechaEnvio;
     _costoEnvioEdit = widget.pedido.costoEnvio;
     _repartidorUidEdit = widget.pedido.repartidorUid;
+    _repartidorNombreEdit = widget.pedido.repartidorNombre;
     _costoCtrl = TextEditingController(
       text: _moneyNoSuffix(_costoEnvioEdit ?? 0),
     );
@@ -143,42 +123,29 @@ class _PedidoDetalleFormState extends State<_PedidoDetalleForm> {
     super.dispose();
   }
 
+  void _applyCostoFromText() {
+    final raw = _costoCtrl.text.trim();
+    final v = _parseMoney(raw);
+    setState(() => _costoEnvioEdit = v < 0 ? 0 : v);
+  }
+
   Future<void> _pickFechaEnvio() async {
     final now = DateTime.now();
     final initial = _fechaEnvioEdit ?? now;
+
     final date = await showDatePicker(
       context: context,
       initialDate: initial,
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 3),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Palette.primary,
-            primary: Palette.primary,
-            secondary: Palette.button,
-          ),
-        ),
-        child: child!,
-      ),
     );
-    if (date == null) return;
-    if (!mounted) return;
+    if (date == null || !mounted) return;
 
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(initial),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Palette.primary,
-            primary: Palette.primary,
-            secondary: Palette.button,
-          ),
-        ),
-        child: child!,
-      ),
     );
+    if (!mounted) return;
 
     setState(() {
       _fechaEnvioEdit = DateTime(
@@ -191,23 +158,18 @@ class _PedidoDetalleFormState extends State<_PedidoDetalleForm> {
     });
   }
 
-  void _applyCostoFromText() {
-    final raw = _costoCtrl.text.trim();
-    final v = _parseMoney(raw);
-    setState(() => _costoEnvioEdit = v < 0 ? 0 : v);
-  }
-
   Future<void> _saveChanges() async {
-    setState(() => _saving = true);
     _applyCostoFromText();
+    setState(() => _saving = true);
 
     try {
       await widget.controller.guardarCambios(
-        data: widget.pedido,
+        pedidoId: widget.pedido.id,
         nuevoEstado: _estadoEdit,
         fechaEnvio: _fechaEnvioEdit,
         costoEnvio: _costoEnvioEdit ?? 0,
         repartidorUid: _repartidorUidEdit,
+        repartidorNombre: _repartidorNombreEdit,
       );
 
       if (!mounted) return;
@@ -216,9 +178,10 @@ class _PedidoDetalleFormState extends State<_PedidoDetalleForm> {
       ).showSnackBar(SnackBar(content: Text('Pedido actualizado ✅')));
       Navigator.pop(context);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('No se pudo guardar: \\$e')));
+      ).showSnackBar(SnackBar(content: Text('Error al guardar: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -227,90 +190,18 @@ class _PedidoDetalleFormState extends State<_PedidoDetalleForm> {
   @override
   Widget build(BuildContext context) {
     final pedido = widget.pedido;
-    final totalProductos = pedido.totalProductos;
     final costoEnvio = _costoEnvioEdit ?? pedido.costoEnvio;
-    final totalFinal = totalProductos + costoEnvio;
-
-    final createdText = _formatTs(pedido.createdAt);
+    final totalFinal = pedido.totalProductos + costoEnvio;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         // HEADER
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(18, 16, 12, 14),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [
-                Palette.primary.withValues(alpha: 0.96),
-                Palette.secondary.withValues(alpha: 0.92),
-                Palette.button.withValues(alpha: 0.96),
-              ],
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                height: 42,
-                width: 42,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.20),
-                  ),
-                ),
-                child: const Icon(
-                  Icons.receipt_long_rounded,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Pedido #${pedido.codigo}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 18,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      createdText.isEmpty ? '—' : 'Creado: $createdText',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-
-              EstadoPill(estado: pedido.estado),
-              IconButton(
-                tooltip: 'Cerrar',
-                onPressed: _saving ? null : () => Navigator.pop(context),
-                icon: Icon(
-                  Icons.close_rounded,
-                  color: Colors.white.withValues(alpha: 0.92),
-                ),
-              ),
-            ],
-          ),
+        Header(
+          codigo: pedido.codigo,
+          estado: normalizeEstado(pedido.estado),
+          createdAt: pedido.createdAt,
+          onClose: _saving ? null : () => Navigator.pop(context),
         ),
 
         // BODY
@@ -320,29 +211,27 @@ class _PedidoDetalleFormState extends State<_PedidoDetalleForm> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Entrega & Cliente (responsive layout)
                 LayoutBuilder(
                   builder: (context, c) {
                     final isWide = c.maxWidth >= 780;
-
                     final left = SectionCard(
                       title: 'Entrega',
                       icon: Icons.location_on_rounded,
                       child: EntregaInfo(
-                        ubNombre: '',
-                        /* opcional */ 
+                        ubNombre: pedido.ubicacionNombre,
                         direccion: pedido.direccion,
                         departamento: pedido.departamento,
                       ),
                     );
-
                     final right = SectionCard(
                       title: 'Cliente',
                       icon: Icons.person_rounded,
-                      child: _ClienteInfo(
-                        nombre: pedido.clienteNombre,
-                        email: pedido.clienteEmail,
+                      child: _ClienteInfoWidget(
+                        uidCliente: pedido.uidCliente,
                         codigoPedido: pedido.codigo,
-                        conteo: pedido.items.length.toString(),
+                        conteoItems: pedido.items.length,
+                        controller: widget.controller,
                       ),
                     );
 
@@ -356,7 +245,6 @@ class _PedidoDetalleFormState extends State<_PedidoDetalleForm> {
                         ],
                       );
                     }
-
                     return Column(
                       children: [left, const SizedBox(height: 14), right],
                     );
@@ -369,172 +257,30 @@ class _PedidoDetalleFormState extends State<_PedidoDetalleForm> {
                 SectionCard(
                   title: 'Gestión',
                   icon: Icons.tune_rounded,
-                  child: Column(
-                    children: [
-                      _EditRow(
-                        label: 'Estado',
-                        child: EstadoEditor(
-                          estadoActual: pedido.estado,
-                          value: _estadoEdit,
-                          onChanged: _saving
-                              ? null
-                              : (v) => setState(() => _estadoEdit = v),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-
-                      _EditRow(
-                        label: 'Fecha envío',
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Palette.fieldBg,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: Palette.ink.withValues(alpha: 0.06),
-                                  ),
-                                ),
-                                child: Text(
-                                  _fechaEnvioEdit == null
-                                      ? '—'
-                                      : DateFormat(
-                                          'dd/MM/yyyy HH:mm',
-                                          'es_BO',
-                                        ).format(_fechaEnvioEdit!),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: Palette.ink,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            OutlinedButton.icon(
-                              onPressed: _saving ? null : _pickFechaEnvio,
-                              icon: const Icon(Icons.calendar_month_rounded),
-                              label: const Text('Editar'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Palette.primary,
-                                side: BorderSide(
-                                  color: Palette.primary.withValues(
-                                    alpha: 0.30,
-                                  ),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      _EditRow(
-                        label: 'Costo envío',
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Palette.fieldBg,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: Palette.ink.withValues(alpha: 0.06),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.local_shipping_rounded,
-                                size: 18,
-                                color: Palette.primary.withValues(alpha: 0.8),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: TextField(
-                                  controller: _costoCtrl,
-                                  enabled: !_saving,
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                        signed: false,
-                                      ),
-                                  onChanged: (_) => _applyCostoFromText(),
-                                  decoration: InputDecoration(
-                                    hintText: '0.00',
-                                    border: InputBorder.none,
-                                    isDense: true,
-                                    hintStyle: TextStyle(
-                                      color: Palette.ink.withValues(
-                                        alpha: 0.45,
-                                      ),
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  style: TextStyle(
-                                    color: Palette.ink,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Palette.button.withValues(alpha: 0.28),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: Palette.primary.withValues(
-                                      alpha: 0.10,
-                                    ),
-                                  ),
-                                ),
-                                child: Text(
-                                  'Bs',
-                                  style: TextStyle(
-                                    color: Palette.ink.withValues(alpha: 0.85),
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 12.5,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      _EditRow(
-                        label: 'Repartidor',
-                        child: _RepartidorPicker(
-                          enabled: !_saving,
-                          departamentoPedido: pedido.departamento,
-                          pedidoAlmacenId: pedido.almacenId,
-                          valueUid: _repartidorUidEdit,
-                          onChanged: (uid) =>
-                              setState(() => _repartidorUidEdit = uid),
-                          controller: widget.controller,
-                        ),
-                      ),
-                    ],
+                  child: _GestionSection(
+                    pedido: pedido,
+                    estadoEdit: _estadoEdit,
+                    onEstadoChanged: _saving
+                        ? null
+                        : (v) => setState(() => _estadoEdit = v),
+                    fechaEnvioEdit: _fechaEnvioEdit,
+                    onPickFecha: _saving ? null : _pickFechaEnvio,
+                    costoCtrl: _costoCtrl,
+                    costoEnvioEdit: _costoEnvioEdit,
+                    onCostoChanged: _saving
+                        ? null
+                        : (_) => _applyCostoFromText(),
+                    repartidorUidEdit: _repartidorUidEdit,
+                    repartidorNombreEdit: _repartidorNombreEdit,
+                    onRepartidorChanged: _saving
+                        ? null
+                        : (uid, nombre) {
+                            setState(() {
+                              _repartidorUidEdit = uid;
+                              _repartidorNombreEdit = nombre;
+                            });
+                          },
+                    controller: widget.controller,
                   ),
                 ),
 
@@ -566,7 +312,7 @@ class _PedidoDetalleFormState extends State<_PedidoDetalleForm> {
                     ),
                   ),
                   child: pedido.items.isEmpty
-                      ? const EmptyBox(text: 'No hay items en este pedido.')
+                      ? EmptyBox(text: 'No hay items en este pedido.')
                       : Column(
                           children: [
                             for (int i = 0; i < pedido.items.length; i++)
@@ -574,7 +320,7 @@ class _PedidoDetalleFormState extends State<_PedidoDetalleForm> {
                                 padding: EdgeInsets.only(
                                   bottom: i == pedido.items.length - 1 ? 0 : 10,
                                 ),
-                                child: _ItemTileTyped(item: pedido.items[i]),
+                                child: _ItemTile(item: pedido.items[i]),
                               ),
                           ],
                         ),
@@ -586,289 +332,81 @@ class _PedidoDetalleFormState extends State<_PedidoDetalleForm> {
                 SectionCard(
                   title: 'Totales',
                   icon: Icons.calculate_rounded,
-                  child: _KeyValueList(
-                    rows: [
-                      _KV('Total productos', _money(totalProductos)),
-                      _KV('Costo envío', _money(costoEnvio)),
-                      _KV('Total final', _money(totalFinal), isStrong: true),
-                    ],
-                  ),
-                ),
-
-                // FOOTER
-                Container(
-                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
-                  decoration: BoxDecoration(
-                    color: Palette.fieldBg,
-                    border: Border(
-                      top: BorderSide(
-                        color: Palette.ink.withValues(alpha: 0.06),
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Tip: asigna repartidor y fecha de envío antes de confirmar.',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Palette.ink.withValues(alpha: 0.62),
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      OutlinedButton(
-                        onPressed: _saving
-                            ? null
-                            : () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Palette.primary,
-                          side: BorderSide(
-                            color: Palette.primary.withValues(alpha: 0.25),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: const Text('Cerrar'),
-                      ),
-                      const SizedBox(width: 10),
-                      FilledButton.icon(
-                        onPressed: _saving ? null : _saveChanges,
-                        icon: _saving
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.save_rounded),
-                        label: Text(_saving ? 'Guardando…' : 'Guardar cambios'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Palette.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      ),
-                    ],
+                  child: _TotalesWidget(
+                    totalProductos: pedido.totalProductos,
+                    costoEnvio: costoEnvio,
+                    totalFinal: totalFinal,
                   ),
                 ),
               ],
             ),
           ),
         ),
+
+        // FOOTER
+        Footer(
+          isSaving: _saving,
+          onClose: _saving ? null : () => Navigator.pop(context),
+          onSave: _saving ? null : _saveChanges,
+        ),
       ],
     );
   }
 }
 
-class _ClienteInfo extends StatelessWidget {
-  const _ClienteInfo({
-    required this.nombre,
-    required this.email,
+/* ===================== WIDGETS ===================== */
+class _ClienteInfoWidget extends StatelessWidget {
+  const _ClienteInfoWidget({
+    required this.uidCliente,
     required this.codigoPedido,
-    required this.conteo,
-  });
-
-  final String nombre;
-  final String email;
-  final String codigoPedido;
-  final String conteo;
-
-  @override
-  Widget build(BuildContext context) {
-    return _KeyValueList(
-      rows: [
-        _KV('Nombre', nombre.isEmpty ? '—' : nombre),
-        _KV('Email', email.isEmpty ? '—' : email),
-        _KV(
-          'Pedido',
-          codigoPedido.isEmpty ? '—' : '#$codigoPedido',
-          isStrong: true,
-        ),
-        _KV('Conteo Productos', conteo),
-      ],
-    );
-  }
-}
-
-/* ===================== GESTIÓN ===================== */
-
-class _EditRow extends StatelessWidget {
-  const _EditRow({required this.label, required this.child});
-  final String label;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final ink = Palette.ink;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 110,
-          child: Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: ink.withValues(alpha: 0.62),
-                fontWeight: FontWeight.w900,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(child: child),
-      ],
-    );
-  }
-}
-
-class _RepartidorPicker extends StatelessWidget {
-  const _RepartidorPicker({
-    required this.enabled,
-    required this.departamentoPedido,
-    required this.pedidoAlmacenId,
-    required this.valueUid,
-    required this.onChanged,
+    required this.conteoItems,
     required this.controller,
   });
 
-  final bool enabled;
-  final String departamentoPedido;
-  final String pedidoAlmacenId; // puede venir vacío
-  final String? valueUid;
-  final ValueChanged<String?> onChanged;
   final PedidoDetalleController controller;
+  final String uidCliente;
+  final String codigoPedido;
+  final int conteoItems;
 
   @override
   Widget build(BuildContext context) {
-    final ink = Palette.ink;
-
-    if (departamentoPedido.trim().isEmpty && pedidoAlmacenId.trim().isEmpty) {
-      return const WarnBox(
-        text:
-            'Este pedido no tiene "departamento" ni "almacenId". No se puede filtrar repartidores.',
-      );
+    if (uidCliente.isEmpty) {
+      return const EmptyBox(text: 'No hay cliente asociado.');
     }
 
-    return FutureBuilder<List<RepartidorOption>>(
-      future: controller
-          .fetchRepartidores(
-            departamento: departamentoPedido,
-            almacenId: pedidoAlmacenId,
-          )
-          .then(
-            (docs) => docs
-                .map((d) => RepartidorOption.fromFirestore(d))
-                .toList(growable: false),
-          ),
+    return FutureBuilder<Map<String, String>>(
+      future: controller.fetchClienteInfo(uidCliente),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return _ghostField('Cargando repartidores…', ink);
-        }
-        if (snap.hasError) {
-          return WarnBox(text: 'Error obteniendo repartidores: ${snap.error}');
+          return _loadingField('Cargando cliente…');
         }
 
-        final options = snap.data ?? [];
-        if (options.isEmpty) {
-          final extra = pedidoAlmacenId.trim().isNotEmpty
-              ? 'del almacén del pedido'
-              : 'de almacenes en "$departamentoPedido"';
-          return WarnBox(text: 'No hay repartidores $extra.');
-        }
-
-        final exists =
-            valueUid != null && options.any((o) => o.uid == valueUid);
-        final current = exists ? valueUid : null;
-
-        return Container(
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: Palette.fieldBg,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: ink.withValues(alpha: 0.06)),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String?>(
-              value: current,
-              isExpanded: true,
-              dropdownColor: Palette.white,
-              borderRadius: BorderRadius.circular(14),
-              icon: Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: ink.withValues(alpha: 0.55),
-              ),
-              style: TextStyle(
-                color: ink,
-                fontWeight: FontWeight.w900,
-                fontSize: 12.8,
-              ),
-              onChanged: enabled ? (v) => onChanged(v) : null,
-              hint: Text(
-                'Seleccionar repartidor…',
-                style: TextStyle(
-                  color: ink.withValues(alpha: 0.55),
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('— Sin asignar —'),
-                ),
-                ...options.map(
-                  (o) => DropdownMenuItem<String?>(
-                    value: o.uid,
-                    child: Text(
-                      o.nombre, // ✅ SOLO NOMBRE
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        final data = snap.data ?? {'nombre': '—', 'email': '—'};
+        return _KeyValueList(
+          rows: [
+            _KV('Nombre', data['nombre'] ?? '—'),
+            _KV('Email', data['email'] ?? '—'),
+            _KV('Código', '#$codigoPedido', isStrong: true),
+            _KV('Items', conteoItems.toString()),
+          ],
         );
       },
     );
   }
 
-  Widget _ghostField(String text, Color ink) {
+  Widget _loadingField(String text) {
     return Container(
-      height: 44,
       alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Palette.fieldBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ink.withValues(alpha: 0.06)),
+        border: Border.all(color: Palette.ink.withValues(alpha: 0.06)),
       ),
       child: Text(
         text,
         style: TextStyle(
-          color: ink.withValues(alpha: 0.7),
+          color: Palette.ink.withValues(alpha: 0.7),
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -876,45 +414,237 @@ class _RepartidorPicker extends StatelessWidget {
   }
 }
 
-/* ===================== ITEMS ===================== */
+class _GestionSection extends StatelessWidget {
+  const _GestionSection({
+    required this.pedido,
+    required this.estadoEdit,
+    required this.onEstadoChanged,
+    required this.fechaEnvioEdit,
+    required this.onPickFecha,
+    required this.costoCtrl,
+    required this.costoEnvioEdit,
+    required this.onCostoChanged,
+    required this.repartidorUidEdit,
+    required this.repartidorNombreEdit,
+    required this.onRepartidorChanged,
+    required this.controller,
+  });
 
-// legacy untyped item tile is removed - use _ItemTileTyped which consumes `PedidoItemData`.
+  final PedidoDetalleData pedido;
+  final String estadoEdit;
+  final ValueChanged<String>? onEstadoChanged;
+  final DateTime? fechaEnvioEdit;
+  final VoidCallback? onPickFecha;
+  final TextEditingController costoCtrl;
+  final double? costoEnvioEdit;
+  final ValueChanged<String>? onCostoChanged;
+  final String? repartidorUidEdit;
+  final String? repartidorNombreEdit;
+  final Function(String? uid, String? nombre)? onRepartidorChanged;
+  final PedidoDetalleController controller;
 
-class _ItemTileTyped extends StatelessWidget {
-  const _ItemTileTyped({required this.item});
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        EditRow(
+          label: 'Estado',
+          child: _EstadoDropdown(value: estadoEdit, onChanged: onEstadoChanged),
+        ),
+        const SizedBox(height: 10),
+        EditRow(
+          label: 'Fecha envío',
+          child: _FechaEnvioField(value: fechaEnvioEdit, onTap: onPickFecha),
+        ),
+        const SizedBox(height: 10),
+        EditRow(
+          label: 'Costo envío',
+          child: _CostoEnvioField(
+            controller: costoCtrl,
+            onChanged: onCostoChanged,
+          ),
+        ),
+        const SizedBox(height: 10),
+        EditRow(
+          label: 'Repartidor',
+          child: RepartidorPickerWidget(
+            departamento: pedido.departamento,
+            almacenId: '',
+            valueUid: repartidorUidEdit,
+            valueNombre: repartidorNombreEdit,
+            onChanged: onRepartidorChanged,
+            controller: controller,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EstadoDropdown extends StatelessWidget {
+  const _EstadoDropdown({required this.value, required this.onChanged});
+  final String value;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final options = [
+      'pendiente',
+      'aceptado',
+      'en camino',
+      'entregado',
+      'cancelado',
+    ];
+
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Palette.fieldBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Palette.ink.withValues(alpha: 0.06)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: options.contains(value) ? value : options.first,
+          isExpanded: true,
+          items: options
+              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+              .toList(),
+          onChanged: onChanged == null
+              ? null
+              : (v) => onChanged!(v ?? options.first),
+        ),
+      ),
+    );
+  }
+}
+
+class _FechaEnvioField extends StatelessWidget {
+  const _FechaEnvioField({required this.value, required this.onTap});
+  final DateTime? value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            alignment: Alignment.centerLeft,
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Palette.fieldBg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Palette.ink.withValues(alpha: 0.06)),
+            ),
+            child: Text(
+              value == null
+                  ? '—'
+                  : DateFormat('dd/MM/yyyy HH:mm', 'es_BO').format(value!),
+              style: TextStyle(color: Palette.ink, fontWeight: FontWeight.w900),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        OutlinedButton.icon(
+          onPressed: onTap,
+          icon: const Icon(Icons.calendar_month_rounded),
+          label: const Text('Editar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _CostoEnvioField extends StatelessWidget {
+  const _CostoEnvioField({required this.controller, required this.onChanged});
+  final TextEditingController controller;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Palette.fieldBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Palette.ink.withValues(alpha: 0.06)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.local_shipping_rounded,
+            size: 18,
+            color: Palette.primary.withValues(alpha: 0.8),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              onChanged: onChanged,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                isDense: true,
+              ),
+              style: TextStyle(color: Palette.ink, fontWeight: FontWeight.w900),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: Palette.button.withValues(alpha: 0.28),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: Palette.primary.withValues(alpha: 0.10),
+              ),
+            ),
+            child: Text(
+              'Bs',
+              style: TextStyle(
+                color: Palette.ink.withValues(alpha: 0.85),
+                fontWeight: FontWeight.w900,
+                fontSize: 12.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemTile extends StatelessWidget {
+  const _ItemTile({required this.item});
   final PedidoItemData item;
 
   @override
   Widget build(BuildContext context) {
-    final ink = Palette.ink;
-
-    final name = item.nombre;
-    final imageUrl = item.imageUrl;
-    final qty = item.cantidad;
-    final price = item.precio;
-    final subtotal = item.subtotal;
-
     return Container(
       decoration: BoxDecoration(
         color: Palette.fieldBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: ink.withValues(alpha: 0.06)),
+        border: Border.all(color: Palette.ink.withValues(alpha: 0.06)),
       ),
       padding: const EdgeInsets.all(10),
       child: Row(
         children: [
-          _Thumb(url: imageUrl),
+          _Thumb(url: item.imageUrl),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  name,
+                  item.nombre,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: ink,
+                    color: Palette.ink,
                     fontWeight: FontWeight.w900,
                     fontSize: 13.2,
                     height: 1.15,
@@ -925,8 +655,8 @@ class _ItemTileTyped extends StatelessWidget {
                   spacing: 8,
                   runSpacing: 6,
                   children: [
-                    _miniPill('Cantidad: $qty'),
-                    _miniPill('Precio: ${_money(price)}'),
+                    _Pill(text: 'Cant: ${item.cantidad}'),
+                    _Pill(text: 'Precio: ${_money(item.precio)}', icon: Icons.price_check),
                   ],
                 ),
               ],
@@ -943,34 +673,15 @@ class _ItemTileTyped extends StatelessWidget {
               ),
             ),
             child: Text(
-              _money(subtotal),
+              _money(item.subtotal),
               style: TextStyle(
-                color: ink,
+                color: Palette.ink,
                 fontWeight: FontWeight.w900,
                 fontSize: 12.5,
               ),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _miniPill(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Palette.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Palette.ink.withValues(alpha: 0.06)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: Palette.ink.withValues(alpha: 0.72),
-          fontWeight: FontWeight.w800,
-          fontSize: 11.5,
-        ),
       ),
     );
   }
@@ -982,14 +693,13 @@ class _Thumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ink = Palette.ink;
     return Container(
       width: 56,
       height: 56,
       decoration: BoxDecoration(
         color: Palette.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: ink.withValues(alpha: 0.08)),
+        border: Border.all(color: Palette.ink.withValues(alpha: 0.08)),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
@@ -1001,17 +711,40 @@ class _Thumb extends StatelessWidget {
             : Image.network(
                 url,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Icon(
-                  Icons.broken_image_rounded,
-                  color: Palette.primary.withValues(alpha: 0.6),
-                ),
+                errorBuilder: (_, __, ___) {
+                  return Icon(
+                    Icons.broken_image_rounded,
+                    color: Palette.primary.withValues(alpha: 0.6),
+                  );
+                },
               ),
       ),
     );
   }
 }
 
-/* ===================== LISTS / BOXES ===================== */
+class _TotalesWidget extends StatelessWidget {
+  const _TotalesWidget({
+    required this.totalProductos,
+    required this.costoEnvio,
+    required this.totalFinal,
+  });
+
+  final double totalProductos;
+  final double costoEnvio;
+  final double totalFinal;
+
+  @override
+  Widget build(BuildContext context) {
+    return _KeyValueList(
+      rows: [
+        _KV('Total productos', _money(totalProductos)),
+        _KV('Costo envío', _money(costoEnvio)),
+        _KV('Total final', _money(totalFinal), isStrong: true),
+      ],
+    );
+  }
+}
 
 class _KeyValueList extends StatelessWidget {
   const _KeyValueList({required this.rows});
@@ -1019,8 +752,6 @@ class _KeyValueList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ink = Palette.ink;
-
     return Column(
       children: [
         for (int i = 0; i < rows.length; i++) ...[
@@ -1029,7 +760,7 @@ class _KeyValueList extends StatelessWidget {
             decoration: BoxDecoration(
               color: Palette.fieldBg,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: ink.withValues(alpha: 0.06)),
+              border: Border.all(color: Palette.ink.withValues(alpha: 0.06)),
             ),
             child: Row(
               children: [
@@ -1038,7 +769,7 @@ class _KeyValueList extends StatelessWidget {
                   child: Text(
                     rows[i].k,
                     style: TextStyle(
-                      color: ink.withValues(alpha: 0.62),
+                      color: Palette.ink.withValues(alpha: 0.62),
                       fontWeight: FontWeight.w900,
                       fontSize: 12,
                     ),
@@ -1049,10 +780,8 @@ class _KeyValueList extends StatelessWidget {
                   child: Text(
                     rows[i].v,
                     textAlign: TextAlign.right,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: ink,
+                      color: Palette.ink,
                       fontWeight: rows[i].isStrong
                           ? FontWeight.w900
                           : FontWeight.w800,
@@ -1070,6 +799,41 @@ class _KeyValueList extends StatelessWidget {
   }
 }
 
+class _Pill extends StatelessWidget {
+  const _Pill({required this.text, this.icon});
+  final String text;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Palette.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Palette.ink.withValues(alpha: 0.06)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: Palette.primary),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            text,
+            style: TextStyle(
+              color: Palette.ink.withValues(alpha: 0.72),
+              fontWeight: FontWeight.w800,
+              fontSize: 11.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /* ===================== HELPERS ===================== */
 
 String _money(double v) {
@@ -1083,28 +847,16 @@ String _moneyNoSuffix(double v) {
 }
 
 double _parseMoney(String raw) {
-  // admite "1.234,50" o "1234.50"
-  final s = raw
-      .replaceAll('Bs', '')
-      .replaceAll('bs', '')
-      .replaceAll(' ', '')
-      .trim();
+  final s = raw.replaceAll('Bs', '').replaceAll(' ', '').trim();
   if (s.isEmpty) return 0;
-  // si tiene coma y punto, asumimos formato es: "." miles, "," decimal
   if (s.contains(',') && s.contains('.')) {
     final normalized = s.replaceAll('.', '').replaceAll(',', '.');
     return double.tryParse(normalized) ?? 0;
   }
-  // si solo tiene coma, la tratamos como decimal
   if (s.contains(',') && !s.contains('.')) {
     return double.tryParse(s.replaceAll(',', '.')) ?? 0;
   }
   return double.tryParse(s) ?? 0;
-}
-
-String _formatTs(DateTime? dt) {
-  if (dt == null) return '';
-  return DateFormat('dd/MM/yyyy HH:mm', 'es_BO').format(dt);
 }
 
 class _KV {

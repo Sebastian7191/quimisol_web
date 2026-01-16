@@ -44,9 +44,7 @@ class SectionCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Palette.button.withValues(alpha: 0.26),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Palette.primary.withValues(alpha: 0.10),
-                  ),
+                  border: Border.all(color: Palette.primary.withValues(alpha: 0.10)),
                 ),
                 child: Icon(icon, color: Palette.primary, size: 18),
               ),

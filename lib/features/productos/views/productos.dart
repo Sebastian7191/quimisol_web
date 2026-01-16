@@ -11,16 +11,18 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:quimisol_web/features/productos/data/producto_dialog_result.dart';
 import '../controllers/products_controller.dart';
 import '../data/producto_row.dart';
-import '../data/form_result.dart';
 import '../data/unidad_option.dart';
 import '../data/almacen_option.dart';
+
+// ✅ NUEVO: dialog extraído
+import 'widgets/producto_dialog.dart';
 
 import 'package:quimisol_web/core/theme/palette.dart';
 
 import 'widgets/dialogs/img_viewer_dialog.dart';
-import 'widgets/dialogs/producto_dialog.dart';
 import 'widgets/empty_box.dart';
 import 'widgets/error_box.dart';
 import 'widgets/loading_table.dart';
@@ -84,7 +86,7 @@ class _ProductosPageState extends State<ProductosPage> {
       return;
     }
 
-    final res = await showDialog<ProductoFormResult>(
+    final res = await showDialog<ProductoDialogResult>(
       context: context,
       barrierDismissible: false,
       builder: (_) => ProductoDialog(
@@ -97,21 +99,11 @@ class _ProductosPageState extends State<ProductosPage> {
     if (res == null) return;
 
     try {
+      // Ahora el producto está dentro de res.producto
       await controller.crearProducto(
-        ProductoFormResult(
-          codigo: res.codigo,
-          nombre: res.nombre,
-          descripcion: res.descripcion,
-          tipoItem: res.tipoItem,
-          unidadId: res.unidadId,
-          unidadNombre: res.unidadNombre,
-          precio: res.precio,
-          stock: res.stock,
-          imageBytes: res.imageBytes,
-          imageName: res.imageName,
-          almacenId: res.almacenId,
-          almacenNombre: res.almacenNombre,
-        ),
+        res.producto,
+        descuento: res.descuento,
+        promoBannerEnabled: res.promoBannerEnabled, // NUEVO
       );
 
       if (mounted) {
@@ -137,7 +129,7 @@ class _ProductosPageState extends State<ProductosPage> {
     required List<UnidadOption> unidades,
     required List<AlmacenOption> almacenes,
   }) async {
-    final res = await showDialog<ProductoFormResult>(
+    final res = await showDialog<ProductoDialogResult>(
       context: context,
       barrierDismissible: false,
       builder: (_) => ProductoDialog(
@@ -150,10 +142,7 @@ class _ProductosPageState extends State<ProductosPage> {
         initialTipoItem: product.tipoItem,
         initialUnidadId: product.unidadId,
         initialPrecio: product.precio.toString(),
-
-        // stock inicial
         initialStock: product.stock.toString(),
-
         initialImagenUrl: product.imagenUrl,
         initialImagenPath: product.imagenPath,
         initialAlmacenId: product.almacenId,
@@ -165,22 +154,11 @@ class _ProductosPageState extends State<ProductosPage> {
     try {
       await controller.actualizarProducto(
         id,
-        ProductoFormResult(
-          codigo: res.codigo,
-          nombre: res.nombre,
-          descripcion: res.descripcion,
-          tipoItem: res.tipoItem,
-          unidadId: res.unidadId,
-          unidadNombre: res.unidadNombre,
-          precio: res.precio,
-          stock: res.stock,
-          imageBytes: res.imageBytes,
-          imageName: res.imageName,
-          almacenId: res.almacenId,
-          almacenNombre: res.almacenNombre,
-        ),
+        res.producto,
         existingImagenUrl: product.imagenUrl,
         existingImagenPath: product.imagenPath,
+        descuento: res.descuento,
+        promoBannerEnabled: res.promoBannerEnabled, // ✅ NUEVO
       );
 
       if (mounted) {
@@ -283,7 +261,6 @@ class _ProductosPageState extends State<ProductosPage> {
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: _unidadesStream(),
-
       builder: (context, unidadesSnap) {
         if (unidadesSnap.hasError) {
           return Padding(
@@ -306,7 +283,6 @@ class _ProductosPageState extends State<ProductosPage> {
 
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: _almacenesStream(),
-
           builder: (context, almacenesSnap) {
             if (almacenesSnap.hasError) {
               return Padding(
@@ -498,7 +474,6 @@ class _ProductosPageState extends State<ProductosPage> {
                   Expanded(
                     child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: _productosStream(),
-
                       builder: (context, snapshot) {
                         if (snapshot.hasError) {
                           return ErrorBox(
@@ -637,8 +612,8 @@ class _ProductosPageState extends State<ProductosPage> {
                                             maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
-                                              color: Palette.ink.withValues(alpha: 
-                                                0.85,
+                                              color: Palette.ink.withValues(
+                                                alpha: 0.85,
                                               ),
                                             ),
                                           ),
@@ -755,7 +730,10 @@ class _ProductoThumb extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Center(
-        child: Icon(Icons.image_outlined, color: Palette.ink.withValues(alpha: 0.35)),
+        child: Icon(
+          Icons.image_outlined,
+          color: Palette.ink.withValues(alpha: 0.35),
+        ),
       ),
     );
 

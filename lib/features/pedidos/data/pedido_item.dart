@@ -4,8 +4,6 @@ class PedidoItemData {
   final int cantidad;
   final double precio;
 
-  double get subtotal => cantidad * precio;
-
   PedidoItemData({
     required this.nombre,
     required this.imageUrl,
@@ -13,24 +11,27 @@ class PedidoItemData {
     required this.precio,
   });
 
-  factory PedidoItemData.fromMap(Map<String, dynamic> m) {
+  double get subtotal => cantidad * precio;
+
+  factory PedidoItemData.fromMap(Map<String, dynamic> map) {
     return PedidoItemData(
-      nombre: (m['name'] ?? m['nombre'] ?? '—').toString(),
-      imageUrl: (m['imageUrl'] ?? '').toString(),
-      cantidad: _asInt(m['qty'], fallback: 1),
-      precio: _asDouble(m['price']),
+      nombre: (map['name'] ?? map['nombre'] ?? '—').toString(),
+      imageUrl: (map['imageUrl'] ?? '').toString(),
+      cantidad: _asInt(map['qty'] ?? map['cantidad'], fallback: 1),
+      precio: _asDouble(map['price'] ?? map['precio']),
     );
   }
 }
 
-/* ===================== HELPERS ===================== */
-
+// helpers locales 
 double _asDouble(dynamic v) {
+  if (v == null) return 0.0;
   if (v is num) return v.toDouble();
-  return double.tryParse(v?.toString() ?? '') ?? 0.0;
+  return double.tryParse(v.toString()) ?? 0.0;
 }
 
 int _asInt(dynamic v, {int fallback = 0}) {
+  if (v == null) return fallback;
   if (v is num) return v.toInt();
-  return int.tryParse(v?.toString() ?? '') ?? fallback;
+  return int.tryParse(v.toString()) ?? fallback;
 }

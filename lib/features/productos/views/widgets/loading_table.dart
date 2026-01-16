@@ -14,13 +14,20 @@ class LoadingTable extends StatelessWidget {
         border: Border.all(color: Palette.button.withValues(alpha: 0.25)),
       ),
       child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 42, color: Palette.primary),
-            const SizedBox(height: 10),
-            const CircularProgressIndicator(),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 42,
+                color: Palette.primary.withValues(alpha: 0.85),
+              ),
+              const SizedBox(height: 10),
+              const CircularProgressIndicator(),
+            ],
+          ),
         ),
       ),
     );

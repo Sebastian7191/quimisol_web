@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:quimisol_web/core/theme/palette.dart';
 
-class ErrorBox extends StatelessWidget {
+class CategoriasErrorBox extends StatelessWidget {
   final String message;
-  const ErrorBox({super.key, required this.message});
+
+  const CategoriasErrorBox({
+    super.key,
+    required this.message,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -14,9 +18,7 @@ class ErrorBox extends StatelessWidget {
         decoration: BoxDecoration(
           color: Palette.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: Palette.statsDanger.withValues(alpha: 0.35),
-          ),
+          border: Border.all(color: Palette.statsDanger.withValues(alpha: 0.35)),
         ),
         child: Row(
           children: [
@@ -26,7 +28,10 @@ class ErrorBox extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(message, style: const TextStyle(color: Palette.ink)),
+              child: Text(
+                message,
+                style: const TextStyle(color: Palette.ink),
+              ),
             ),
           ],
         ),

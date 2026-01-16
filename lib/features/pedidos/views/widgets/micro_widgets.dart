@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:quimisol_web/core/theme/palette.dart';
+import 'package:quimisol_web/core/constants/pedido_estado.dart';
+
+import '../../data/pedido_row.dart';
 
 class CountPill extends StatelessWidget {
   const CountPill({super.key, required this.count});
@@ -59,8 +62,9 @@ class EstadoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _statusColor(estado);
-    final label = _label(estado);
+    final st = normalizeEstado(estado);
+    final c = _statusColor(st);
+    final label = _label(st);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -81,30 +85,32 @@ class EstadoChip extends StatelessWidget {
   }
 
   String _label(String s) {
-    switch (s) {
-      case 'entregado':
+    switch (normalizeEstado(s)) {
+      case kEstadoEntregado:
         return 'Entregado';
-      case 'cancelado':
+      case kEstadoCancelado:
         return 'Cancelado';
-      case 'en camino':
+      case kEstadoEnCamino:
         return 'En camino';
-      case 'Aceptado':
+      case kEstadoAceptado:
         return 'Aceptado';
-      case 'pendiente':
+      case kEstadoPendiente:
       default:
         return 'Pendiente';
     }
   }
 
   Color _statusColor(String s) {
-    switch (s) {
-      case 'entregado':
+    switch (normalizeEstado(s)) {
+      case kEstadoEntregado:
         return Palette.statsSuccess;
-      case 'cancelado':
+      case kEstadoCancelado:
         return Palette.statsDanger;
-      case 'en camino':
+      case kEstadoEnCamino:
         return Palette.statsWarning;
-      case 'pendiente':
+      case kEstadoAceptado:
+        return Palette.secondary;
+      case kEstadoPendiente:
       default:
         return Palette.primary;
     }
@@ -112,44 +118,44 @@ class EstadoChip extends StatelessWidget {
 }
 
 Widget miniPill(IconData icon, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Palette.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Palette.ink.withValues(alpha: 0.06)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: Palette.primary),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: TextStyle(
-              color: Palette.ink.withValues(alpha: 0.72),
-              fontWeight: FontWeight.w800,
-              fontSize: 11.5,
-            ),
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: Palette.white,
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: Palette.ink.withValues(alpha: 0.06)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: Palette.primary),
+        const SizedBox(width: 6),
+        Text(
+          text,
+          style: TextStyle(
+            color: Palette.ink.withValues(alpha: 0.72),
+            fontWeight: FontWeight.w800,
+            fontSize: 11.5,
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
-  Color statusColor(String s) {
-    switch (s) {
-      case 'entregado':
-        return Palette.statsSuccess;
-      case 'cancelado':
-        return Palette.statsDanger;
-      case 'en camino':
-        return Palette.statsWarning;
-      case 'Aceptado':
-        return Palette.statsSuccess;
-      case 'pendiente':
-      default:
-        return Palette.primary;
+Color statusColor(String s) {
+  switch (normalizeEstado(s)) {
+    case kEstadoEntregado:
+      return Palette.statsSuccess;
+    case kEstadoCancelado:
+      return Palette.statsDanger;
+    case kEstadoEnCamino:
+      return Palette.statsWarning;
+    case kEstadoAceptado:
+      return Palette.secondary;
+    case kEstadoPendiente:
+    default:
+      return Palette.primary;
   }
 }
 
@@ -228,6 +234,120 @@ class EmptyState extends StatelessWidget {
                   color: ink.withValues(alpha: 0.55),
                   fontWeight: FontWeight.w800,
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PedidoCard extends StatelessWidget {
+  const PedidoCard({super.key, required this.pedido, required this.onTap});
+
+  final PedidoRow pedido;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = pedido;
+    final ink = Palette.ink;
+
+    final codigo = p.codigo.isEmpty ? '—' : p.codigo;
+    final estado = p.estado;
+
+    final direccion = p.direccion;
+    final depto = p.departamento;
+    final conteo = p.conteoItems;
+
+    //final totalFinal = p.totalFinal;
+
+    final fecha = p.fechaLabel;
+    final c = statusColor(estado);
+
+    return Material(
+      color: Palette.fieldBg,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: ink.withValues(alpha: 0.06)),
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          child: Row(
+            children: [
+              Container(
+                width: 10,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: c,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          '#$codigo',
+                          style: TextStyle(
+                            color: ink,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14.5,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        EstadoChip(estado: estado),
+                        const Spacer(),
+                        Text(
+                          fecha.isEmpty ? '—' : fecha,
+                          style: TextStyle(
+                            color: ink.withValues(alpha: 0.55),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      direccion.isEmpty ? '—' : direccion,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: ink.withValues(alpha: 0.78),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.8,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        miniPill(
+                          Icons.map_rounded,
+                          depto.isEmpty ? '—' : depto,
+                        ),
+                        miniPill(Icons.shopping_bag_rounded, 'Items: $conteo'),
+                        miniPill(Icons.payments_rounded, p.totalLabel),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: ink.withValues(alpha: 0.35),
               ),
             ],
           ),

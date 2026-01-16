@@ -1,118 +1,95 @@
-// lib/features/admin/pedidos/controllers/pedido_detalle_controller.dart
+// lib/features/pedidos/controllers/detalle_controller.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../data/detalle_data.dart';
 
 class PedidoDetalleController {
-  final _fire = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /* ================= FETCH ================= */
-
+  // Obtiene los datos completos del pedido tipados
   Future<PedidoDetalleData> fetchPedido(String pedidoId) async {
-    final pedidoSnap =
-        await _fire.collection('pedidos').doc(pedidoId).get();
+    final doc = await _firestore.collection('pedidos').doc(pedidoId).get();
+    return PedidoDetalleData.fromDoc(doc);
+  }
 
-    if (!pedidoSnap.exists || pedidoSnap.data() == null) {
-      throw Exception('Pedido no encontrado');
+  // Obtiene cliente info (nombre, email)
+  Future<Map<String, String>> fetchClienteInfo(String clienteUid) async {
+    try {
+      final doc = await _firestore.collection('usuarios').doc(clienteUid).get();
+      final data = doc.data() ?? {};
+      return {
+        'nombre': (data['name'] ?? data['nombre'] ?? 'Cliente').toString(),
+        'email': (data['email'] ?? '').toString(),
+      };
+    } catch (_) {
+      return {'nombre': 'Cliente', 'email': ''};
+    }
+  }
+
+  // Obtiene repartidores permitidos (por departamento y/o almacenId)
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> fetchRepartidores({
+    String? departamento,
+    String? almacenId,
+  }) async {
+    // Si el pedido tiene almacenId específico, busca solo en ese almacén
+    if (almacenId != null && almacenId.trim().isNotEmpty) {
+      final q = await _firestore
+          .collection('almacenes')
+          .doc(almacenId)
+          .collection('repartidores')
+          .get();
+      return q.docs;
     }
 
-    final pedido = pedidoSnap.data()!;
+    // Si no, busca almacenes del departamento
+    if (departamento != null && departamento.trim().isNotEmpty) {
+      final almacenesSnap = await _firestore
+          .collection('almacenes')
+          .where('departamento', isEqualTo: departamento)
+          .get();
 
-    // Cliente
-    final uid = (pedido['uid'] ?? '').toString();
-    String clienteNombre = 'Cliente';
-    String clienteEmail = '—';
+      final repartidores = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+      for (final almacenDoc in almacenesSnap.docs) {
+        final reps = await almacenDoc.reference
+            .collection('repartidores')
+            .get();
+        repartidores.addAll(reps.docs);
+      }
+      return repartidores;
+    }
 
-    if (uid.isNotEmpty) {
-      final userSnap = await _fire.collection('usuarios').doc(uid).get();
-      final u = userSnap.data();
-      if (u != null) {
-        clienteNombre = (u['name'] ?? u['nombre'] ?? 'Cliente').toString();
-        clienteEmail = (u['email'] ?? '—').toString();
+    return [];
+  }
+
+  // Guarda cambios al pedido
+  Future<void> guardarCambios({
+    required String pedidoId,
+    required String nuevoEstado,
+    DateTime? fechaEnvio,
+    double? costoEnvio,
+    String? repartidorUid,
+    String? repartidorNombre,
+  }) async {
+    final data = <String, dynamic>{};
+
+    data['estado'] = nuevoEstado;
+
+    if (fechaEnvio != null) {
+      data['fecha_envio'] = Timestamp.fromDate(fechaEnvio);
+    }
+    if (costoEnvio != null) {
+      data['costo_envio'] = costoEnvio;
+    }
+
+    if (repartidorUid != null && repartidorUid.isNotEmpty) {
+      data['repartidorUid'] = repartidorUid;
+      if (repartidorNombre != null && repartidorNombre.isNotEmpty) {
+        data['repartidorNombre'] = repartidorNombre;
       }
     }
 
-    return PedidoDetalleData.fromFirestore(
-      pedidoSnap.id,
-      pedido,
-      clienteNombre: clienteNombre,
-      clienteEmail: clienteEmail,
-    );
-  }
+    data['updatedAt'] = FieldValue.serverTimestamp();
 
-  /* ================= REPARTIDORES ================= */
-
-  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-      fetchRepartidores({
-    required String departamento,
-    required String almacenId,
-  }) async {
-    List<String> almacenesIds = [];
-
-    if (almacenId.isNotEmpty) {
-      almacenesIds = [almacenId];
-    } else if (departamento.isNotEmpty) {
-      final q = await _fire
-          .collection('almacenes')
-          .where('departamento', isEqualTo: departamento)
-          .where('activo', isEqualTo: true)
-          .limit(10)
-          .get();
-
-      almacenesIds = q.docs.map((d) => d.id).toList();
-    }
-
-    if (almacenesIds.isEmpty) return [];
-
-    final query = almacenesIds.length == 1
-        ? _fire
-            .collection('repartidores')
-            .where('almacenId', isEqualTo: almacenesIds.first)
-        : _fire
-            .collection('repartidores')
-            .where('almacenId', whereIn: almacenesIds);
-
-    final snap = await query.get();
-    return snap.docs;
-  }
-
-  /* ================= SAVE ================= */
-
-  Future<void> guardarCambios({
-    required PedidoDetalleData data,
-    required String nuevoEstado,
-    required DateTime? fechaEnvio,
-    required double costoEnvio,
-    required String? repartidorUid,
-  }) async {
-    final ref = _fire.collection('pedidos').doc(data.id);
-
-    final updates = <String, dynamic>{};
-
-    if (data.estado == 'pendiente' && nuevoEstado == 'Aceptado') {
-      updates['estado'] = 'Aceptado';
-    }
-
-    updates['fecha_envio'] =
-        fechaEnvio == null ? null : Timestamp.fromDate(fechaEnvio);
-
-    updates['costo_envio'] = costoEnvio;
-
-    if (repartidorUid != null && repartidorUid.isNotEmpty) {
-      updates['repartidorUid'] = repartidorUid;
-
-      final repSnap =
-          await _fire.collection('repartidores').doc(repartidorUid).get();
-      final rep = repSnap.data() ?? {};
-      updates['repartidorNombre'] =
-          (rep['name'] ?? rep['nombre'] ?? 'Repartidor').toString();
-    } else {
-      updates['repartidorUid'] = FieldValue.delete();
-      updates['repartidorNombre'] = FieldValue.delete();
-    }
-
-    updates['updatedAt'] = FieldValue.serverTimestamp();
-
-    await ref.update(updates);
+    await _firestore.collection('pedidos').doc(pedidoId).update(data);
   }
 }

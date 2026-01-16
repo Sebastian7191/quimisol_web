@@ -67,10 +67,7 @@ class EntregaInfo extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            pill(
-              departamento.isEmpty ? '—' : departamento,
-              icon: Icons.map_rounded,
-            ),
+            pill(departamento.isEmpty ? '—' : departamento, icon: Icons.map_rounded),
             if (ubNombre.isNotEmpty) pill(ubNombre, icon: Icons.home_rounded),
           ],
         ),

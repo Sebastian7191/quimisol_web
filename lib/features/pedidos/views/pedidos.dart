@@ -1,28 +1,12 @@
-// lib/features/admin/pedidos/pedidos_page.dart
-//
-// ✅ Lista de pedidos (Firestore /pedidos)
-// ✅ Separado por DEPARTAMENTOS (Cochabamba, La Paz, etc.)
-// ✅ Filtro por estado (Todos / pendiente / en camino / entregado / cancelado)
-// ✅ Buscador (codigo, direccion, uid)
-// ✅ Cards lindas (rosa/morado) con conteo items + total + fecha
-// ✅ Tap abre el modal bonito: showPedidoDetalleDialog (detalle_pedido.dart)
-//
-// Requiere:
-// - core/theme/palette.dart
-// - detalle_pedido.dart (la función showPedidoDetalleDialog)
-//
-// Importa este page donde lo uses en SidebarShellPage.
-
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:quimisol_web/core/constants/pedido_estado.dart';
 import 'package:quimisol_web/core/theme/palette.dart';
-
 import 'package:quimisol_web/features/pedidos/views/detalle_pedido.dart';
 
 import '../controllers/pedidos_controller.dart';
-import '../data/pedido_row.dart';
 import 'widgets/micro_widgets.dart';
 import 'widgets/stagger_in.dart';
 
@@ -66,8 +50,27 @@ class _PedidosPageState extends State<PedidosPage>
     super.dispose();
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> _pedidosStream() {
-    return controller.pedidosStream();
+  Stream<QuerySnapshot<Map<String, dynamic>>> pedidosStream() {
+    return FirebaseFirestore.instance
+        .collection('pedidos')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  bool matches(Map<String, dynamic> p) {
+    final estado = normalizeEstado(p['estado']);
+
+    if (_estado != 'Todos' && estado != _estado) return false;
+
+    if (_q.isEmpty) return true;
+    final q = _q.toLowerCase();
+
+    final codigo = (p['codigo'] ?? '').toString().toLowerCase();
+    final direccion = (p['direccion'] ?? '').toString().toLowerCase();
+    final uid = (p['uid'] ?? '').toString().toLowerCase();
+    final depto = (p['departamento'] ?? '').toString().toLowerCase();
+
+    return codigo.contains(q) || direccion.contains(q) || uid.contains(q) || depto.contains(q);
   }
 
   @override
@@ -85,8 +88,8 @@ class _PedidosPageState extends State<PedidosPage>
             onEstado: (v) => setState(() => _estado = v),
           ),
           Expanded(
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: _pedidosStream(),
+            child: StreamBuilder(
+              stream: controller.pedidosStream(),
               builder: (context, snap) {
                 if (snap.hasError) {
                   return Center(
@@ -101,9 +104,7 @@ class _PedidosPageState extends State<PedidosPage>
                 }
 
                 final docs = snap.data?.docs ?? [];
-
                 final idToDoc = {for (final d in docs) d.id: d};
-
                 final pedidos = docs
                     .map((d) => controller.parsePedidoRow(d))
                     .toList();
@@ -164,7 +165,7 @@ class _PedidosPageState extends State<PedidosPage>
                                           ? 0
                                           : 10,
                                     ),
-                                    child: _PedidoCard(
+                                    child: PedidoCard(
                                       pedido: p,
                                       onTap: () async {
                                         final doc = idToDoc[p.id];
@@ -175,8 +176,6 @@ class _PedidosPageState extends State<PedidosPage>
                                           context,
                                           doc.id,
                                         );
-
-                                        // fuerza refresco visual al volver del modal
                                         if (mounted) setState(() {});
                                       },
                                     ),
@@ -200,7 +199,6 @@ class _PedidosPageState extends State<PedidosPage>
 }
 
 /* ================= HEADER ================= */
-
 class _PedidosHeader extends StatelessWidget {
   const _PedidosHeader({
     required this.bgCtrl,
@@ -223,7 +221,6 @@ class _PedidosHeader extends StatelessWidget {
       builder: (_, __) {
         final t = bgCtrl.value;
 
-        // ✅ MORADO izquierda -> ROSADO derecha (horizontal)
         final left = Color.lerp(
           Palette.primary,
           Palette.gradientEnd,
@@ -393,26 +390,27 @@ class _EstadoFilterMini extends StatelessWidget {
   Widget build(BuildContext context) {
     final ink = Palette.ink;
 
+  // Acá creo esta fallando los filtros pero no se porque xd
     const items = <String>[
       'Todos',
-      'pendiente',
-      'Aceptado',
-      'en camino',
-      'entregado',
-      'cancelado',
+      kEstadoPendiente,
+      kEstadoAceptado,
+      kEstadoEnCamino,
+      kEstadoEntregado,
+      kEstadoCancelado,
     ];
 
     String labelFor(String v) {
       switch (v) {
-        case 'pendiente':
+        case kEstadoPendiente:
           return 'Pendiente';
-        case 'Aceptado':
+        case kEstadoAceptado:
           return 'Aceptado';
-        case 'en camino':
+        case kEstadoEnCamino:
           return 'En camino';
-        case 'entregado':
+        case kEstadoEntregado:
           return 'Entregado';
-        case 'cancelado':
+        case kEstadoCancelado:
           return 'Cancelado';
         default:
           return 'Todos';
@@ -442,9 +440,8 @@ class _EstadoFilterMini extends StatelessWidget {
             fontSize: 12.5,
           ),
           onChanged: (v) => onChanged(v ?? 'Todos'),
-          selectedItemBuilder: (_) => items
-              .map((e) => Center(child: Text(labelFor(e))))
-              .toList(growable: false),
+          selectedItemBuilder: (_) =>
+              items.map((e) => Center(child: Text(labelFor(e)))).toList(),
           items: items
               .map(
                 (e) => DropdownMenuItem(
@@ -542,124 +539,6 @@ class _DeptoBlock extends StatelessWidget {
           const SizedBox(height: 12),
           ...children,
         ],
-      ),
-    );
-  }
-}
-
-/* ================= CARD PEDIDO ================= */
-
-class _PedidoCard extends StatelessWidget {
-  const _PedidoCard({required this.pedido, required this.onTap});
-
-  final PedidoRow pedido;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = pedido;
-    final ink = Palette.ink;
-
-    final codigo = p.codigo.isEmpty ? '—' : p.codigo;
-    final estado = p.estado;
-
-    final direccion = p.direccion;
-    final depto = p.departamento;
-    final conteo = p.conteoItems;
-
-    //final totalFinal = p.totalFinal;
-
-    final fecha = p.fechaLabel;
-    final totalLabel = p.totalLabel;
-
-    final c = statusColor(estado);
-
-    return Material(
-      color: Palette.fieldBg,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: ink.withValues(alpha: 0.06)),
-          ),
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-          child: Row(
-            children: [
-              Container(
-                width: 10,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: c,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          '#$codigo',
-                          style: TextStyle(
-                            color: ink,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 14.5,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        EstadoChip(estado: estado),
-                        const Spacer(),
-                        Text(
-                          fecha.isEmpty ? '—' : fecha,
-                          style: TextStyle(
-                            color: ink.withValues(alpha: 0.55),
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      direccion.isEmpty ? '—' : direccion,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: ink.withValues(alpha: 0.78),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12.8,
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: [
-                        miniPill(
-                          Icons.map_rounded,
-                          depto.isEmpty ? '—' : depto,
-                        ),
-                        miniPill(Icons.shopping_bag_rounded, 'Items: $conteo'),
-                        miniPill(Icons.payments_rounded, totalLabel),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: ink.withValues(alpha: 0.35),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

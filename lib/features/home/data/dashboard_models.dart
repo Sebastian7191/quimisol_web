@@ -1,11 +1,12 @@
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:quimisol_web/core/constants/pedido_estado.dart';
 
-String normalizeEstado(String s) {
+/*String normalizeEstado(String s) {
   final e = s.trim().toLowerCase();
   if (e == 'en_camino' || e == 'encamino') return 'en camino';
   return e;
-}
+}*/
 
 class DashboardStats {
   // pedidos

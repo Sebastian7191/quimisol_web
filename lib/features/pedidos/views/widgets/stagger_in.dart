@@ -6,11 +6,10 @@ class StaggerIn extends StatefulWidget {
   final int delayMs;
 
   @override
-  State<StaggerIn> createState() => _StaggerInState();
+  State<StaggerIn> createState() => StaggerInState();
 }
 
-class _StaggerInState extends State<StaggerIn>
-    with SingleTickerProviderStateMixin {
+class StaggerInState extends State<StaggerIn> with SingleTickerProviderStateMixin {
   late final AnimationController _c;
   late final Animation<double> _fade;
   late final Animation<Offset> _slide;
@@ -18,15 +17,11 @@ class _StaggerInState extends State<StaggerIn>
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 420),
-    );
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 420));
     _fade = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
-    _slide = Tween<Offset>(
-      begin: const Offset(0, 0.06),
-      end: Offset.zero,
-    ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(_c);
+    _slide = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
+        .chain(CurveTween(curve: Curves.easeOutCubic))
+        .animate(_c);
 
     Future.delayed(Duration(milliseconds: widget.delayMs), () {
       if (mounted) _c.forward();
