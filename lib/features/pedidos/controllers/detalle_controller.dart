@@ -26,39 +26,44 @@ class PedidoDetalleController {
     }
   }
 
-  // Obtiene repartidores permitidos (por departamento y/o almacenId)
+  // ✅ Obtiene repartidores (colección raíz /repartidores) filtrando por almacenId
+  // - Si hay almacenId: where almacenId == X
+  // - Si NO hay: busca almacenes por departamento, luego whereIn(almacenId in [...]) en chunks de 10
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> fetchRepartidores({
     String? departamento,
     String? almacenId,
   }) async {
-    // Si el pedido tiene almacenId específico, busca solo en ese almacén
-    if (almacenId != null && almacenId.trim().isNotEmpty) {
+    final alm = (almacenId ?? '').trim();
+    if (alm.isNotEmpty) {
       final q = await _firestore
-          .collection('almacenes')
-          .doc(almacenId)
           .collection('repartidores')
+          .where('almacenId', isEqualTo: alm)
           .get();
       return q.docs;
     }
 
-    // Si no, busca almacenes del departamento
-    if (departamento != null && departamento.trim().isNotEmpty) {
-      final almacenesSnap = await _firestore
-          .collection('almacenes')
-          .where('departamento', isEqualTo: departamento)
-          .get();
+    final dep = (departamento ?? '').trim();
+    if (dep.isEmpty) return [];
 
-      final repartidores = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-      for (final almacenDoc in almacenesSnap.docs) {
-        final reps = await almacenDoc.reference
-            .collection('repartidores')
-            .get();
-        repartidores.addAll(reps.docs);
-      }
-      return repartidores;
+    final almacenesSnap = await _firestore
+        .collection('almacenes')
+        .where('departamento', isEqualTo: dep)
+        .get();
+
+    final ids = almacenesSnap.docs.map((d) => d.id).toList();
+    if (ids.isEmpty) return [];
+
+    final out = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+    for (final chunk in _chunks(ids, 10)) {
+      final q = await _firestore
+          .collection('repartidores')
+          .where('almacenId', whereIn: chunk)
+          .get();
+      out.addAll(q.docs);
     }
 
-    return [];
+    return out;
   }
 
   // Guarda cambios al pedido
@@ -74,22 +79,34 @@ class PedidoDetalleController {
 
     data['estado'] = nuevoEstado;
 
-    if (fechaEnvio != null) {
-      data['fecha_envio'] = Timestamp.fromDate(fechaEnvio);
-    }
+    // fecha envio
+    data['fecha_envio'] = fechaEnvio == null ? null : Timestamp.fromDate(fechaEnvio);
+
+    // costo envio
     if (costoEnvio != null) {
       data['costo_envio'] = costoEnvio;
     }
 
-    if (repartidorUid != null && repartidorUid.isNotEmpty) {
-      data['repartidorUid'] = repartidorUid;
-      if (repartidorNombre != null && repartidorNombre.isNotEmpty) {
-        data['repartidorNombre'] = repartidorNombre;
-      }
+    // ✅ si no hay repartidor => borra asignación
+    final repUid = (repartidorUid ?? '').trim();
+    if (repUid.isEmpty) {
+      data['repartidorUid'] = FieldValue.delete();
+      data['repartidorNombre'] = FieldValue.delete();
+    } else {
+      data['repartidorUid'] = repUid;
+      final repNom = (repartidorNombre ?? '').trim();
+      if (repNom.isNotEmpty) data['repartidorNombre'] = repNom;
     }
 
     data['updatedAt'] = FieldValue.serverTimestamp();
 
     await _firestore.collection('pedidos').doc(pedidoId).update(data);
+  }
+}
+
+Iterable<List<T>> _chunks<T>(List<T> list, int size) sync* {
+  for (int i = 0; i < list.length; i += size) {
+    final end = (i + size > list.length) ? list.length : i + size;
+    yield list.sublist(i, end);
   }
 }

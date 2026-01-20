@@ -13,6 +13,9 @@ class PedidoDetalleData {
 
   final String uidCliente;
 
+  // ✅ NUEVO: almacenId (si existe en el pedido)
+  final String almacenId;
+
   final DateTime? fechaEnvio;
   final double costoEnvio;
 
@@ -34,6 +37,7 @@ class PedidoDetalleData {
     required this.departamento,
     required this.ubicacionNombre,
     required this.uidCliente,
+    required this.almacenId,
     required this.fechaEnvio,
     required this.costoEnvio,
     required this.repartidorUid,
@@ -49,40 +53,62 @@ class PedidoDetalleData {
   ) {
     final data = doc.data() ?? {};
 
-    final itemsRaw = (data['items'] is List) ? data['items'] as List : [];
+    final ubic = _asMap(data['ubicacion']);
 
+    final itemsRaw = (data['items'] is List) ? data['items'] as List : [];
     final items = itemsRaw
         .whereType<Map>()
         .map((e) => PedidoItemData.fromMap(Map<String, dynamic>.from(e)))
         .toList();
 
     final totalProductos = items.fold<double>(0, (sumT, e) => sumT + e.subtotal);
-
     final costoEnvio = _asDouble(data['costo_envio']);
+
+    // ✅ almacenId desde el pedido (varias posibles llaves)
+    final almacenId = (data['almacenId'] ??
+            data['almacen_id'] ??
+            data['almacenUid'] ??
+            data['almacen_uid'] ??
+            '')
+        .toString()
+        .trim();
+
+    // ✅ departamento: primero el campo directo, si no, desde ubicacion
+    final dep = ((data['departamento'] ?? '').toString().trim().isNotEmpty
+            ? (data['departamento'] ?? '').toString()
+            : (ubic['departamento'] ?? '').toString())
+        .toString()
+        .trim();
+
+    final direccion = (data['direccion'] ?? '').toString().trim();
+    final ubicNombre = (ubic['nombre'] ?? '').toString().trim();
+
+    final repUidRaw = (data['repartidorUid'] ?? data['repartidor_uid'] ?? '')
+        .toString()
+        .trim();
+    final repNombreRaw =
+        (data['repartidorNombre'] ?? data['repartidor_nombre'] ?? '')
+            .toString()
+            .trim();
 
     return PedidoDetalleData(
       id: doc.id,
       codigo: (data['codigo'] ?? '—').toString(),
       estado: (data['estado'] ?? 'pendiente').toString(),
 
-      direccion: (data['direccion'] ?? '').toString(),
-      departamento:
-          (data['departamento'] ?? data['ubicacion']?['departamento'] ?? '')
-              .toString(),
-      ubicacionNombre: (data['ubicacion']?['nombre'] ?? '').toString(),
+      direccion: direccion,
+      departamento: dep,
+      ubicacionNombre: ubicNombre,
 
-      uidCliente: (data['uid'] ?? '').toString(),
+      uidCliente: (data['uid'] ?? '').toString().trim(),
+
+      almacenId: almacenId,
 
       fechaEnvio: _tsToDate(data['fecha_envio']),
       costoEnvio: costoEnvio,
 
-      repartidorUid: (data['repartidorUid'] ?? '').toString().trim().isEmpty
-          ? null
-          : data['repartidorUid'],
-      repartidorNombre:
-          (data['repartidorNombre'] ?? '').toString().trim().isEmpty
-          ? null
-          : data['repartidorNombre'],
+      repartidorUid: repUidRaw.isEmpty ? null : repUidRaw,
+      repartidorNombre: repNombreRaw.isEmpty ? null : repNombreRaw,
 
       totalProductos: totalProductos,
       totalFinal: totalProductos + costoEnvio,
@@ -104,4 +130,10 @@ DateTime? _tsToDate(dynamic v) {
   if (v is Timestamp) return v.toDate();
   if (v is DateTime) return v;
   return null;
+}
+
+Map<String, dynamic> _asMap(dynamic v) {
+  if (v is Map<String, dynamic>) return v;
+  if (v is Map) return Map<String, dynamic>.from(v);
+  return <String, dynamic>{};
 }

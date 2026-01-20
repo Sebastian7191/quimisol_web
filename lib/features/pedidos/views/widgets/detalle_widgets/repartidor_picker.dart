@@ -1,4 +1,3 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:quimisol_web/core/theme/palette.dart';
@@ -26,15 +25,15 @@ class RepartidorPickerWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (departamento.isEmpty && almacenId.isEmpty) {
-      return WarnBox(text: 'Este pedido no tiene departamento ni almacenId.');
+    final dep = departamento.trim();
+    final alm = almacenId.trim();
+
+    if (dep.isEmpty && alm.isEmpty) {
+      return const WarnBox(text: 'Este pedido no tiene departamento ni almacenId.');
     }
 
-    return FutureBuilder<List<QueryDocumentSnapshot>>(
-      future: controller.fetchRepartidores(
-        departamento: departamento,
-        almacenId: almacenId,
-      ),
+    return FutureBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
+      future: controller.fetchRepartidores(departamento: dep, almacenId: alm),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return _ghostField('Cargando repartidores…');
@@ -45,17 +44,23 @@ class RepartidorPickerWidget extends StatelessWidget {
 
         final options = snap.data ?? [];
         if (options.isEmpty) {
-          return WarnBox(text: 'No hay repartidores disponibles.');
+          final extra = alm.isNotEmpty ? '(almacenId: "$alm")' : '(depto: "$dep")';
+          return WarnBox(text: 'No hay repartidores disponibles. $extra');
         }
 
-        final repartidoresMap = {
+        final repartidoresMap = <String, String>{
           for (final doc in options)
-            doc.id:
-                ((doc.data() as Map<String, dynamic>?)?['name'] ??
-                        (doc.data() as Map<String, dynamic>?)?['nombre'] ??
+            doc.id: ((doc.data()['name'] ??
+                        doc.data()['nombre'] ??
                         'Repartidor')
-                    .toString(),
+                    .toString()
+                    .trim()),
         };
+
+        // ✅ Evita crash si valueUid no está en items
+        final current = (valueUid != null && repartidoresMap.containsKey(valueUid))
+            ? valueUid
+            : null;
 
         return Container(
           height: 44,
@@ -67,9 +72,13 @@ class RepartidorPickerWidget extends StatelessWidget {
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String?>(
-              value: valueUid,
+              value: current,
               isExpanded: true,
-              hint: const Text('Seleccionar repartidor…'),
+              hint: Text(
+                valueNombre?.trim().isNotEmpty == true
+                    ? valueNombre!.trim()
+                    : 'Seleccionar repartidor…',
+              ),
               items: [
                 const DropdownMenuItem<String?>(
                   value: null,
@@ -78,13 +87,17 @@ class RepartidorPickerWidget extends StatelessWidget {
                 ...repartidoresMap.entries.map(
                   (e) => DropdownMenuItem<String?>(
                     value: e.key,
-                    child: Text(e.value),
+                    child: Text(
+                      e.value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ],
               onChanged: onChanged == null
                   ? null
-                  : (uid) => onChanged!(uid, repartidoresMap[uid]),
+                  : (uid) => onChanged!(uid, uid == null ? null : repartidoresMap[uid]),
             ),
           ),
         );
