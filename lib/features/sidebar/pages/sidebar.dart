@@ -4,6 +4,8 @@
 // ✅ IndexFromPath actualizado para /pedidos
 // ✅ NUEVO: Categorías agregado al sidebar + pages
 // ✅ IndexFromPath actualizado para /categorias
+// ✅ NUEVO: Banners agregado al sidebar + pages
+// ✅ IndexFromPath actualizado para /banners
 //
 // OJO: ajusta el import de CategoriasPage según dónde lo guardaste.
 // En mi ejemplo: lib/features/categorias/views/categorias.dart
@@ -22,8 +24,11 @@ import 'package:quimisol_web/features/productos/views/productos.dart';
 import 'package:quimisol_web/features/unidades/views/unidades.dart';
 import 'package:quimisol_web/features/usuarios/views/usuarios.dart';
 
-// ✅ NUEVO: Categorías
+// ✅ Categorías
 import 'package:quimisol_web/features/categorias/views/categorias.dart';
+
+// ✅ Banners (página real)
+import 'package:quimisol_web/features/banners/views/banners.dart';
 
 class SidebarShellPage extends StatefulWidget {
   const SidebarShellPage({super.key});
@@ -72,11 +77,18 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
       route: '/unidades',
     ),
 
-    // ✅ NUEVO: CATEGORÍAS
+    // ✅ CATEGORÍAS
     _SideItem(
       icon: Icons.category_rounded,
       label: 'Categorías',
       route: '/categorias',
+    ),
+
+    // ✅ BANNERS
+    _SideItem(
+      icon: Icons.campaign_rounded,
+      label: 'Banners',
+      route: '/banners',
     ),
 
     // ✅ PEDIDOS
@@ -112,11 +124,11 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
     if (path.startsWith('/productos')) return 3;
     if (path.startsWith('/unidades')) return 4;
 
-    // ✅ NUEVO
     if (path.startsWith('/categorias')) return 5;
 
-    // ✅ PEDIDOS (se movió de índice)
-    if (path.startsWith('/pedidos')) return 6;
+    if (path.startsWith('/banners')) return 6;
+
+    if (path.startsWith('/pedidos')) return 7;
 
     return 0; // dashboard por defecto
   }
@@ -172,10 +184,11 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
       const ProductosPage(),
       const UnidadesPage(),
 
-      // ✅ NUEVO
       const CategoriasPage(),
 
-      // ✅ PEDIDOS
+      // ✅ BANNERS (real)
+      const BannersPage(),
+
       const PedidosPage(),
     ];
 
@@ -405,8 +418,9 @@ class _SidebarItemTile extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color:
-              selected ? mainColor.withValues(alpha: 0.5) : Colors.transparent,
+          color: selected
+              ? mainColor.withValues(alpha: 0.5)
+              : Colors.transparent,
         ),
       ),
       child: InkWell(
