@@ -9,6 +9,7 @@ import 'charts/pedidos_estado_bar_chart.dart';
 import 'charts/pedidos_departamento_pie.dart';
 import 'lists/recent_pedidos_list.dart';
 import 'lists/low_stock_list.dart';
+import 'lists/top_products_list.dart';
 
 class DashboardSections extends StatelessWidget {
   const DashboardSections({super.key, required this.width, required this.stats, required this.range});
@@ -69,12 +70,15 @@ class DashboardSections extends StatelessWidget {
             ],
           );
 
+    
     final listsRow = stacked
         ? Column(
             children: [
               section('Pedidos recientes', 'Últimos 6', RecentPedidosList(items: stats.pedidosRecientes)),
               const SizedBox(height: 12),
               section('Stock bajo', 'Recomendado: reponer', LowStockList(items: stats.productosLowStock)),
+              const SizedBox(height: 12),
+              section('Top productos vendidos', 'Por cantidad (según pedidos)', TopProductsList(items: stats.topProductosVendidos)),
             ],
           )
         : Row(
@@ -83,6 +87,8 @@ class DashboardSections extends StatelessWidget {
               Expanded(child: section('Pedidos recientes', 'Últimos 6', RecentPedidosList(items: stats.pedidosRecientes))),
               const SizedBox(width: 12),
               Expanded(child: section('Stock bajo', 'Recomendado: reponer', LowStockList(items: stats.productosLowStock))),
+              const SizedBox(width: 12),
+              Expanded(child: section('Top productos vendidos', 'Por cantidad (según pedidos)', TopProductsList(items: stats.topProductosVendidos))),
             ],
           );
 

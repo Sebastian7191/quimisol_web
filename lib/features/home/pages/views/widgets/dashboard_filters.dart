@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:quimisol_web/core/theme/palette.dart';
 import '../../controllers/dashboard_controller.dart';
 
-class DashboardFilters extends StatelessWidget {
+class DashboardFilters extends StatefulWidget {
   const DashboardFilters({
     super.key,
     required this.controller,
@@ -14,10 +14,30 @@ class DashboardFilters extends StatelessWidget {
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> almacenes;
 
   @override
+  State<DashboardFilters> createState() => _DashboardFiltersState();
+}
+
+class _DashboardFiltersState extends State<DashboardFilters> {
+  @override
+  void didUpdateWidget(covariant DashboardFilters oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // ✅ Evita crash: si el almacenId seleccionado ya no existe en items
+    // (por carga lenta / activo=false / etc.), lo limpiamos.
+    final id = widget.controller.almacenId;
+    if (id != null && !widget.almacenes.any((d) => d.id == id)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.controller.setAlmacen(null);
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final itemsAlm = <DropdownMenuItem<String?>>[
       const DropdownMenuItem(value: null, child: Text('Todos los almacenes')),
-      ...almacenes.map((d) {
+      ...widget.almacenes.map((d) {
         final m = d.data();
         return DropdownMenuItem<String?>(
           value: d.id,
@@ -48,6 +68,10 @@ class DashboardFilters extends StatelessWidget {
       'Pando',
     ];
 
+    final almId = widget.controller.almacenId;
+    final safeAlmValue =
+        (almId != null && widget.almacenes.any((d) => d.id == almId)) ? almId : null;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -70,34 +94,34 @@ class DashboardFilters extends StatelessWidget {
           _chipRange(context),
           _drop(
             label: 'Estado',
-            value: controller.estado,
+            value: widget.controller.estado,
             items: estados.map((e) {
               return DropdownMenuItem<String?>(
                 value: e,
                 child: Text(e == null ? 'Todos los estados' : e),
               );
             }).toList(),
-            onChanged: (v) => controller.setEstado(v),
+            onChanged: (v) => widget.controller.setEstado(v),
           ),
           _drop(
             label: 'Departamento',
-            value: controller.departamento,
+            value: widget.controller.departamento,
             items: departamentos.map((d) {
               return DropdownMenuItem<String?>(
                 value: d,
                 child: Text(d ?? 'Todos los departamentos'),
               );
             }).toList(),
-            onChanged: (v) => controller.setDepartamento(v),
+            onChanged: (v) => widget.controller.setDepartamento(v),
           ),
           _drop(
             label: 'Almacén (productos/repartidores)',
-            value: controller.almacenId,
+            value: safeAlmValue,
             items: itemsAlm,
-            onChanged: (v) => controller.setAlmacen(v),
+            onChanged: (v) => widget.controller.setAlmacen(v),
           ),
           TextButton.icon(
-            onPressed: controller.clear,
+            onPressed: widget.controller.clear,
             icon: const Icon(Icons.restart_alt_rounded),
             label: const Text('Limpiar'),
           ),
@@ -108,16 +132,22 @@ class DashboardFilters extends StatelessWidget {
 
   Widget _chipRange(BuildContext context) {
     Widget chip(String t, DashboardRange r) {
-      final sel = controller.range == r;
+      final sel = widget.controller.range == r;
       return InkWell(
-        onTap: () => controller.setRange(r),
+        onTap: () => widget.controller.setRange(r),
         borderRadius: BorderRadius.circular(999),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: sel ? Palette.primary.withValues(alpha: 0.14) : Palette.card.withValues(alpha: 0.55),
+            color: sel
+                ? Palette.primary.withValues(alpha: 0.14)
+                : Palette.card.withValues(alpha: 0.55),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: sel ? Palette.primary.withValues(alpha: 0.35) : Palette.primary.withValues(alpha: 0.14)),
+            border: Border.all(
+              color: sel
+                  ? Palette.primary.withValues(alpha: 0.35)
+                  : Palette.primary.withValues(alpha: 0.14),
+            ),
           ),
           child: Text(
             t,

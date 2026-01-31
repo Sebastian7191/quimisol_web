@@ -1,32 +1,32 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-
 class DashboardFirestore {
   final FirebaseFirestore _db;
   DashboardFirestore(this._db);
 
+  /// Stream de pedidos optimizado para Dashboard.
+  ///
+  /// ✅ Evita bugs por datos inconsistentes (estado/departamento a veces vienen
+  /// en minúsculas o dentro de `ubicacion`), por eso NO filtramos aquí por
+  /// estado/departamento. Esos filtros se aplican en memoria en la UI.
+  ///
+  /// ✅ Reduce carga: ordena por createdAt desc y limita resultados.
   Stream<QuerySnapshot<Map<String, dynamic>>> pedidosStream({
     DateTime? from,
-    String? estado,
-    String? departamento,
+    int limit = 1500,
   }) {
     Query<Map<String, dynamic>> q = _db.collection('pedidos');
 
     if (from != null) {
-      q = q.where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(from));
-    }
-    if (departamento != null) {
-      q = q.where('departamento', isEqualTo: departamento);
-    }
-
-    // Estado: tu BD guarda "En camino" con mayúsculas.
-    // No podemos hacer where case-insensitive, así que si filtras por estado,
-    // aplicamos un where por la forma "bonita".
-    if (estado != null) {
-      q = q.where('estado', isEqualTo: _prettyEstado(estado));
+      // Para inequality se recomienda orderBy del mismo campo.
+      q = q.where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(from))
+           .orderBy('createdAt', descending: true);
+    } else {
+      // "Todo" puede ser enorme, limitamos igualmente para que no reviente la UI.
+      q = q.orderBy('createdAt', descending: true);
     }
 
-    return q.snapshots();
+    return q.limit(limit).snapshots();
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> productosStream({
@@ -57,14 +57,4 @@ class DashboardFirestore {
 
   Stream<QuerySnapshot<Map<String, dynamic>>> bannersStream() =>
       _db.collection('banners').snapshots();
-
-  static String _prettyEstado(String raw) {
-    final e = raw.trim().toLowerCase();
-    if (e == 'pendiente') return 'Pendiente';
-    if (e == 'aceptado') return 'Aceptado';
-    if (e == 'en camino' || e == 'en_camino' || e == 'encamino') return 'En camino';
-    if (e == 'entregado') return 'Entregado';
-    if (e == 'cancelado') return 'Cancelado';
-    return raw;
-  }
 }

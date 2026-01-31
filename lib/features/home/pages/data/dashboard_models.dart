@@ -1,10 +1,41 @@
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+String _normBasic(String s) {
+  var v = s.trim().toLowerCase();
+  v = v
+      .replaceAll('á', 'a')
+      .replaceAll('é', 'e')
+      .replaceAll('í', 'i')
+      .replaceAll('ó', 'o')
+      .replaceAll('ú', 'u')
+      .replaceAll('ü', 'u')
+      .replaceAll('ñ', 'n');
+  v = v.replaceAll('_', ' ');
+  v = v.replaceAll(RegExp(r'\s+'), ' ');
+  return v;
+}
+
 String normalizeEstado(String s) {
-  final e = s.trim().toLowerCase();
-  if (e == 'en_camino' || e == 'encamino') return 'en camino';
+  final e = _normBasic(s);
+  if (e == 'en camino' || e == 'en camino ') return 'en camino';
   return e;
+}
+
+String canonicalDepartamento(String raw) {
+  final n = _normBasic(raw);
+  const map = {
+    'cochabamba': 'Cochabamba',
+    'la paz': 'La Paz',
+    'santa cruz': 'Santa Cruz',
+    'oruro': 'Oruro',
+    'potosi': 'Potosí',
+    'chuquisaca': 'Chuquisaca',
+    'tarija': 'Tarija',
+    'beni': 'Beni',
+    'pando': 'Pando',
+  };
+  return map[n] ?? (raw.trim().isEmpty ? '' : raw.trim());
 }
 
 class DashboardStats {
@@ -43,6 +74,9 @@ class DashboardStats {
   final Map<String, int> pedidosPorDepartamento;
   final Map<String, int> pedidosPorEstado;
 
+  // ✅ extra: top productos vendidos (por cantidad)
+  final List<TopProductoVenta> topProductosVendidos;
+
   DashboardStats({
     required this.pedidosTotal,
     required this.pedidosPendientes,
@@ -65,6 +99,7 @@ class DashboardStats {
     required this.pedidosPorDia,
     required this.pedidosPorDepartamento,
     required this.pedidosPorEstado,
+    required this.topProductosVendidos,
   });
 
   static DashboardStats build({
@@ -75,6 +110,7 @@ class DashboardStats {
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> banners,
     DateTime? rangeStart,
     int recentLimit = 6,
+    int topProductsLimit = 8,
   }) {
     // ===== pedidos =====
     int pend = 0, acept = 0, enc = 0, entr = 0, canc = 0;
@@ -85,16 +121,25 @@ class DashboardStats {
     final porDep = <String, int>{};
     final porEstado = <String, int>{};
 
+    // top products
+    final topAgg = <String, _TopAgg>{};
+
     for (final d in pedidos) {
       final m = d.data();
 
       final estadoRaw = (m['estado'] ?? '').toString();
       final estado = normalizeEstado(estadoRaw);
 
-      final dep = (m['departamento'] ?? '').toString().trim();
+      // departamento puede venir en root o en ubicacion.departamento
+      final depRaw = (m['departamento'] ??
+              (m['ubicacion'] is Map ? (m['ubicacion']['departamento']) : null) ??
+              '')
+          .toString();
+      final dep = canonicalDepartamento(depRaw);
       if (dep.isNotEmpty) porDep[dep] = (porDep[dep] ?? 0) + 1;
 
-      porEstado[estado.isEmpty ? '—' : estado] = (porEstado[estado.isEmpty ? '—' : estado] ?? 0) + 1;
+      final estKey = estado.isEmpty ? '—' : estado;
+      porEstado[estKey] = (porEstado[estKey] ?? 0) + 1;
 
       DateTime created = DateTime.fromMillisecondsSinceEpoch(0);
       final raw = m['createdAt'];
@@ -102,7 +147,8 @@ class DashboardStats {
       if (raw is DateTime) created = raw;
 
       final dayKey = DateTime(created.year, created.month, created.day);
-      if (rangeStart == null || !dayKey.isBefore(DateTime(rangeStart.year, rangeStart.month, rangeStart.day))) {
+      if (rangeStart == null ||
+          !dayKey.isBefore(DateTime(rangeStart.year, rangeStart.month, rangeStart.day))) {
         porDia[dayKey] = (porDia[dayKey] ?? 0) + 1;
       }
 
@@ -118,20 +164,63 @@ class DashboardStats {
       else if (estado == 'entregado') entr++;
       else if (estado == 'cancelado') canc++;
 
+      // direccion puede venir en root o ubicacion.direccion
+      final dir = (m['direccion'] ??
+              (m['ubicacion'] is Map ? (m['ubicacion']['direccion']) : null) ??
+              '')
+          .toString();
+
       recent.add(PedidoMini(
         id: d.id,
         codigo: (m['codigo'] ?? '').toString(),
-        direccion: (m['direccion'] ?? '').toString(),
+        direccion: dir,
         departamento: dep,
         estado: estadoRaw,
         createdAt: created,
         total: _numToDouble(totalRaw),
         repartidorNombre: (m['repartidorNombre'] ?? '').toString(),
       ));
+
+      // agregación top productos vendidos
+      final items = m['items'];
+      if (items is List) {
+        for (final it in items) {
+          if (it is! Map) continue;
+          final productId = (it['productId'] ?? it['idProducto'] ?? '').toString();
+          final name = (it['name'] ?? it['nombre'] ?? '').toString();
+          final key = productId.isNotEmpty ? productId : name;
+          if (key.isEmpty) continue;
+
+          final qty = _numToInt(it['qty'] ?? it['cantidad']);
+          final price = _numToDouble(it['price'] ?? it['precio']);
+          final agg = topAgg.putIfAbsent(key, () => _TopAgg(
+                productId: productId,
+                nombre: name.isEmpty ? (productId.isEmpty ? key : productId) : name,
+              ));
+          agg.qty += qty;
+          agg.ventas += qty * price;
+        }
+      }
     }
 
     recent.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final recentCut = recent.take(recentLimit).toList();
+
+    final topList = topAgg.values.toList()
+      ..sort((a, b) {
+        final c = b.qty.compareTo(a.qty);
+        if (c != 0) return c;
+        return b.ventas.compareTo(a.ventas);
+      });
+
+    final topOut = topList.take(topProductsLimit).map((a) {
+      return TopProductoVenta(
+        productId: a.productId,
+        nombre: a.nombre,
+        qty: a.qty,
+        ventas: a.ventas,
+      );
+    }).toList();
 
     // ===== productos =====
     final lowStock = <ProductoMini>[];
@@ -142,7 +231,8 @@ class DashboardStats {
       final m = d.data();
       final nombre = (m['nombre'] ?? '').toString();
       final tipo = (m['tipoItem'] ?? '').toString().trim();
-      porTipo[tipo.isEmpty ? 'Sin tipo' : tipo] = (porTipo[tipo.isEmpty ? 'Sin tipo' : tipo] ?? 0) + 1;
+      porTipo[tipo.isEmpty ? 'Sin tipo' : tipo] =
+          (porTipo[tipo.isEmpty ? 'Sin tipo' : tipo] ?? 0) + 1;
 
       final stock = _numToInt(m['stock']);
       if (stock <= 5) {
@@ -188,6 +278,7 @@ class DashboardStats {
       pedidosPorDia: porDia,
       pedidosPorDepartamento: porDep,
       pedidosPorEstado: porEstado,
+      topProductosVendidos: topOut,
     );
   }
 
@@ -241,6 +332,28 @@ class ProductoMini {
   });
 }
 
+class TopProductoVenta {
+  final String productId;
+  final String nombre;
+  final int qty;
+  final double ventas;
+
+  TopProductoVenta({
+    required this.productId,
+    required this.nombre,
+    required this.qty,
+    required this.ventas,
+  });
+}
+
+class _TopAgg {
+  final String productId;
+  final String nombre;
+  int qty = 0;
+  double ventas = 0;
+  _TopAgg({required this.productId, required this.nombre});
+}
+
 List<DateTime> buildDayAxis(DateTime start, int days) {
   return List.generate(days, (i) {
     final d = start.add(Duration(days: i));
@@ -248,4 +361,5 @@ List<DateTime> buildDayAxis(DateTime start, int days) {
   });
 }
 
-int maxMapValue(Map<String, int> m) => m.isEmpty ? 1 : m.values.fold(1, (a, b) => math.max(a, b));
+int maxMapValue(Map<String, int> m) =>
+    m.isEmpty ? 1 : m.values.fold(1, (a, b) => math.max(a, b));
