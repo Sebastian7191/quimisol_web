@@ -1,13 +1,11 @@
 // lib/features/admin/productos/productos_page.dart
 //
-// ✅ Firestore: collection('productos') + collection('unidades') + collection('almacenes')
-// ✅ Imágenes: Firebase Storage bucket gs://quimisol-4f159.firebasestorage.app
-// ✅ Carpeta: productos_e_insumos/{productId}/{filename}
-// ✅ Picker WEB: image_picker_web
+// ✅ Responsive UI:
+// - Desktop: DataTable (igual)
+// - Mobile: Cards/List (sin tocar data)
 //
-// Requiere en pubspec.yaml:
-//   firebase_storage: ^12.1.0
-//   image_picker_web: ^4.0.0
+// ⚠️ NO se tocó:
+// - streams, controller, mapProducto, filterProductos, CRUD
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -17,7 +15,6 @@ import '../data/producto_row.dart';
 import '../data/unidad_option.dart';
 import '../data/almacen_option.dart';
 
-// ✅ NUEVO: dialog extraído
 import 'widgets/producto_dialog.dart';
 
 import 'package:quimisol_web/core/theme/palette.dart';
@@ -99,11 +96,10 @@ class _ProductosPageState extends State<ProductosPage> {
     if (res == null) return;
 
     try {
-      // Ahora el producto está dentro de res.producto
       await controller.crearProducto(
         res.producto,
         descuento: res.descuento,
-        promoBannerEnabled: res.promoBannerEnabled, // NUEVO
+        promoBannerEnabled: res.promoBannerEnabled,
       );
 
       if (mounted) {
@@ -158,13 +154,12 @@ class _ProductosPageState extends State<ProductosPage> {
         existingImagenUrl: product.imagenUrl,
         existingImagenPath: product.imagenPath,
         descuento: res.descuento,
-        promoBannerEnabled: res.promoBannerEnabled, // ✅ NUEVO
+        promoBannerEnabled: res.promoBannerEnabled,
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Producto actualizado')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Producto actualizado')));
       }
     } catch (e) {
       if (mounted) {
@@ -226,9 +221,8 @@ class _ProductosPageState extends State<ProductosPage> {
       await controller.eliminarProducto(id, imagenPath);
 
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Producto eliminado')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Producto eliminado')));
       }
     } catch (e) {
       if (mounted) {
@@ -308,249 +302,321 @@ class _ProductosPageState extends State<ProductosPage> {
                 .where((a) => a.activo)
                 .toList();
 
-            return Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ================= HEADER =================
-                  Row(
-                    children: [
-                      const Text(
-                        'Gestión de Productos',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: Palette.ink,
-                        ),
-                      ),
-                      const Spacer(),
-                      ElevatedButton.icon(
-                        onPressed: (unidades.isEmpty || almacenes.isEmpty)
-                            ? null
-                            : () => _openAddDialog(
-                                unidades: unidades,
-                                almacenes: almacenes,
-                              ),
-                        icon: const Icon(Icons.add_rounded),
-                        label: const Text('Agregar producto'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Palette.button,
-                          foregroundColor: Palette.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 14,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          textStyle: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+            return LayoutBuilder(
+              builder: (context, box) {
+                final isMobile = box.maxWidth < 860;
+                final pad = isMobile ? 12.0 : 20.0;
 
-                  if (unidades.isEmpty || almacenes.isEmpty) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Palette.card,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: Palette.button.withValues(alpha: 0.35),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline_rounded,
-                            color: Palette.ink.withValues(alpha: 0.8),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              unidades.isEmpty
-                                  ? 'Primero crea al menos una unidad (Ej: Kilogramo, Litro, Unidad).'
-                                  : 'Primero crea al menos un almacén en la colección "almacenes".',
+                return Padding(
+                  padding: EdgeInsets.all(pad),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ================= HEADER =================
+                      if (!isMobile)
+                        Row(
+                          children: [
+                            const Text(
+                              'Gestión de Productos',
                               style: TextStyle(
-                                color: Palette.ink.withValues(alpha: 0.85),
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: Palette.ink,
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 14),
-
-                  // ================= BUSCADOR =================
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchCtrl,
-                          decoration: InputDecoration(
-                            hintText: 'Buscar por código o nombre...',
-                            filled: true,
-                            fillColor: Palette.fieldBg,
-                            prefixIcon: Icon(
-                              Icons.search_rounded,
-                              color: Palette.ink.withValues(alpha: 0.65),
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(
-                                color: Palette.button.withValues(alpha: 0.35),
+                            const Spacer(),
+                            ElevatedButton.icon(
+                              onPressed: (unidades.isEmpty || almacenes.isEmpty)
+                                  ? null
+                                  : () => _openAddDialog(
+                                        unidades: unidades,
+                                        almacenes: almacenes,
+                                      ),
+                              icon: const Icon(Icons.add_rounded),
+                              label: const Text('Agregar producto'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Palette.button,
+                                foregroundColor: Palette.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 18,
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                textStyle: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(
-                                color: Palette.button.withValues(alpha: 0.25),
+                          ],
+                        )
+                      else
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Text(
+                              'Gestión de Productos',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                color: Palette.ink,
                               ),
                             ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(
-                                color: Palette.primary.withValues(alpha: 0.8),
-                                width: 1.6,
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              height: 48,
+                              child: ElevatedButton.icon(
+                                onPressed: (unidades.isEmpty || almacenes.isEmpty)
+                                    ? null
+                                    : () => _openAddDialog(
+                                          unidades: unidades,
+                                          almacenes: almacenes,
+                                        ),
+                                icon: const Icon(Icons.add_rounded),
+                                label: const Text('Agregar producto'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Palette.button,
+                                  foregroundColor: Palette.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  textStyle: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      OutlinedButton.icon(
-                        onPressed: () => _searchCtrl.clear(),
-                        icon: const Icon(Icons.clear_rounded),
-                        label: const Text('Limpiar'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Palette.ink,
-                          side: BorderSide(
-                            color: Palette.button.withValues(alpha: 0.55),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 14,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
 
-                  const SizedBox(height: 10),
-
-                  // ================= FILTRO TIPO =================
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: ['Todos', 'PRODUCTO', 'INSUMO'].map((t) {
-                      final selected = _tipo == t;
-                      return ChoiceChip(
-                        label: Text(t == 'Todos' ? 'Todos' : t),
-                        selected: selected,
-                        selectedColor: Palette.button,
-                        backgroundColor: Palette.card,
-                        labelStyle: TextStyle(
-                          color: selected ? Palette.white : Palette.ink,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        onSelected: (_) => setState(() => _tipo = t),
-                      );
-                    }).toList(),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // ================= LISTADO =================
-                  Expanded(
-                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: _productosStream(),
-                      builder: (context, snapshot) {
-                        if (snapshot.hasError) {
-                          return ErrorBox(
-                            message:
-                                'Error al cargar productos: ${snapshot.error}',
-                          );
-                        }
-
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const LoadingTable(
-                            icon: Icons.inventory_2_rounded,
-                          );
-                        }
-
-                        final docs = snapshot.data?.docs ?? [];
-
-                        final productos = docs
-                            .map((d) => controller.mapProducto(d))
-                            .toList();
-
-                        productos.sort((a, b) {
-                          final da = a.createdAt;
-                          final db = b.createdAt;
-                          if (da == null && db == null) return 0;
-                          if (da == null) return 1;
-                          if (db == null) return -1;
-                          return db.compareTo(da);
-                        });
-
-                        final filtered = controller.filterProductos(
-                          rows: productos,
-                          search: _search,
-                          tipo: _tipo,
-                        );
-
-                        if (filtered.isEmpty) {
-                          return const EmptyBox(
-                            title: 'No hay productos',
-                            subtitle:
-                                'Agrega un producto o ajusta tus filtros.',
-                            icon: Icons.inventory_2_rounded,
-                          );
-                        }
-
-                        return Container(
+                      if (unidades.isEmpty || almacenes.isEmpty) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Palette.white,
-                            borderRadius: BorderRadius.circular(18),
+                            color: Palette.card,
+                            borderRadius: BorderRadius.circular(14),
                             border: Border.all(
                               color: Palette.button.withValues(alpha: 0.35),
                             ),
                           ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(18),
-                            child: SingleChildScrollView(
-                              child: DataTable(
-                                headingRowHeight: 52,
-                                dataRowMinHeight: 64,
-                                dataRowMaxHeight: 84,
-                                columnSpacing: 18,
-                                headingTextStyle: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  color: Palette.ink,
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline_rounded,
+                                color: Palette.ink.withValues(alpha: 0.8),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  unidades.isEmpty
+                                      ? 'Primero crea al menos una unidad (Ej: Kilogramo, Litro, Unidad).'
+                                      : 'Primero crea al menos un almacén en la colección "almacenes".',
+                                  style: TextStyle(
+                                    color: Palette.ink.withValues(alpha: 0.85),
+                                  ),
                                 ),
-                                columns: const [
-                                  DataColumn(label: Text('Imagen')),
-                                  DataColumn(label: Text('Código')),
-                                  DataColumn(label: Text('Nombre')),
-                                  DataColumn(label: Text('Descripción')),
-                                  DataColumn(label: Text('Tipo')),
-                                  DataColumn(label: Text('Unidad')),
-                                  DataColumn(label: Text('Stock')),
-                                  DataColumn(label: Text('Precio')),
-                                  DataColumn(label: Text('Acciones')),
-                                ],
-                                rows: filtered.map((p) {
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 14),
+
+                      // ================= BUSCADOR =================
+                      if (!isMobile)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _searchCtrl,
+                                decoration: InputDecoration(
+                                  hintText: 'Buscar por código o nombre...',
+                                  filled: true,
+                                  fillColor: Palette.fieldBg,
+                                  prefixIcon: Icon(
+                                    Icons.search_rounded,
+                                    color: Palette.ink.withValues(alpha: 0.65),
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: BorderSide(
+                                      color: Palette.button.withValues(alpha: 0.35),
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: BorderSide(
+                                      color: Palette.button.withValues(alpha: 0.25),
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: BorderSide(
+                                      color: Palette.primary.withValues(alpha: 0.8),
+                                      width: 1.6,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            OutlinedButton.icon(
+                              onPressed: () => _searchCtrl.clear(),
+                              icon: const Icon(Icons.clear_rounded),
+                              label: const Text('Limpiar'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Palette.ink,
+                                side: BorderSide(
+                                  color: Palette.button.withValues(alpha: 0.55),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Column(
+                          children: [
+                            TextField(
+                              controller: _searchCtrl,
+                              decoration: InputDecoration(
+                                hintText: 'Buscar por código o nombre...',
+                                filled: true,
+                                fillColor: Palette.fieldBg,
+                                prefixIcon: Icon(
+                                  Icons.search_rounded,
+                                  color: Palette.ink.withValues(alpha: 0.65),
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(
+                                    color: Palette.button.withValues(alpha: 0.35),
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(
+                                    color: Palette.button.withValues(alpha: 0.25),
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(
+                                    color: Palette.primary.withValues(alpha: 0.8),
+                                    width: 1.6,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 46,
+                              child: OutlinedButton.icon(
+                                onPressed: () => _searchCtrl.clear(),
+                                icon: const Icon(Icons.clear_rounded),
+                                label: const Text('Limpiar'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Palette.ink,
+                                  side: BorderSide(
+                                    color: Palette.button.withValues(alpha: 0.55),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                      const SizedBox(height: 10),
+
+                      // ================= FILTRO TIPO =================
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: ['Todos', 'PRODUCTO', 'INSUMO'].map((t) {
+                          final selected = _tipo == t;
+                          return ChoiceChip(
+                            label: Text(t == 'Todos' ? 'Todos' : t),
+                            selected: selected,
+                            selectedColor: Palette.button,
+                            backgroundColor: Palette.card,
+                            labelStyle: TextStyle(
+                              color: selected ? Palette.white : Palette.ink,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            onSelected: (_) => setState(() => _tipo = t),
+                          );
+                        }).toList(),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // ================= LISTADO =================
+                      Expanded(
+                        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                          stream: _productosStream(),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasError) {
+                              return ErrorBox(
+                                message: 'Error al cargar productos: ${snapshot.error}',
+                              );
+                            }
+
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return const LoadingTable(icon: Icons.inventory_2_rounded);
+                            }
+
+                            final docs = snapshot.data?.docs ?? [];
+
+                            final productos = docs.map((d) => controller.mapProducto(d)).toList();
+
+                            productos.sort((a, b) {
+                              final da = a.createdAt;
+                              final db = b.createdAt;
+                              if (da == null && db == null) return 0;
+                              if (da == null) return 1;
+                              if (db == null) return -1;
+                              return db.compareTo(da);
+                            });
+
+                            final filtered = controller.filterProductos(
+                              rows: productos,
+                              search: _search,
+                              tipo: _tipo,
+                            );
+
+                            if (filtered.isEmpty) {
+                              return const EmptyBox(
+                                title: 'No hay productos',
+                                subtitle: 'Agrega un producto o ajusta tus filtros.',
+                                icon: Icons.inventory_2_rounded,
+                              );
+                            }
+
+                            // ✅ MOBILE: cards
+                            if (isMobile) {
+                              return ListView.separated(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                itemCount: filtered.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                                itemBuilder: (_, i) {
+                                  final p = filtered[i];
+
                                   final id = p.id;
                                   final codigo = p.codigo;
                                   final nombre = p.nombre;
@@ -562,117 +628,175 @@ class _ProductosPageState extends State<ProductosPage> {
                                   final imagenUrl = p.imagenUrl.trim();
                                   final imagenPath = p.imagenPath.trim();
 
-                                  return DataRow(
-                                    cells: [
-                                      DataCell(
-                                        InkWell(
-                                          onTap:
-                                              (imagenPath.isEmpty &&
-                                                  imagenUrl.isEmpty)
-                                              ? null
-                                              : () => _openImageViewer(
-                                                  title: nombre,
-                                                  imagenPath: imagenPath,
-                                                  imagenUrl: imagenUrl,
-                                                ),
-                                          child: _ProductoThumb(
-                                            imagenPath: imagenPath,
-                                            imagenUrl: imagenUrl,
-                                          ),
-                                        ),
-                                      ),
-                                      DataCell(
-                                        Text(
-                                          codigo.isEmpty ? '-' : codigo,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                      DataCell(
-                                        SizedBox(
-                                          width: 240,
-                                          child: Text(
-                                            nombre.isEmpty ? '-' : nombre,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
+                                  return _ProductoCardMobile(
+                                    nombre: nombre,
+                                    codigo: codigo,
+                                    tipoItem: tipoItem,
+                                    unidadNombre: unidadNombre,
+                                    descripcion: desc,
+                                    stock: stock,
+                                    precio: precio,
+                                    imagenUrl: imagenUrl,
+                                    onTapImage: (imagenPath.isEmpty && imagenUrl.isEmpty)
+                                        ? null
+                                        : () => _openImageViewer(
+                                              title: nombre,
+                                              imagenPath: imagenPath,
+                                              imagenUrl: imagenUrl,
                                             ),
-                                          ),
-                                        ),
-                                      ),
-                                      DataCell(
-                                        SizedBox(
-                                          width: 320,
-                                          child: Text(
-                                            desc.trim().isEmpty
-                                                ? '-'
-                                                : desc.trim(),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: Palette.ink.withValues(
-                                                alpha: 0.85,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      DataCell(_ChipTipo(tipoItem: tipoItem)),
-                                      DataCell(
-                                        Text(
-                                          unidadNombre.isEmpty
-                                              ? '-'
-                                              : unidadNombre,
-                                        ),
-                                      ),
-                                      DataCell(Text(stock.toString())),
-                                      DataCell(Text(precio.toStringAsFixed(2))),
-                                      DataCell(
-                                        Row(
-                                          children: [
-                                            IconButton(
-                                              tooltip: 'Editar',
-                                              onPressed: () => _openEditDialog(
-                                                id: id,
-                                                product: p,
-                                                unidades: unidades,
-                                                almacenes: almacenes,
-                                              ),
-                                              icon: Icon(
-                                                Icons.edit_rounded,
-                                                color: Palette.primary,
-                                              ),
-                                            ),
-                                            IconButton(
-                                              tooltip: 'Eliminar',
-                                              onPressed: () => _deleteProducto(
-                                                id,
-                                                nombre,
-                                                imagenPath: imagenPath,
-                                              ),
-                                              icon: Icon(
-                                                Icons.delete_outline_rounded,
-                                                color: Palette.statsDanger
-                                                    .withValues(alpha: 0.95),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
+                                    onEdit: () => _openEditDialog(
+                                      id: id,
+                                      product: p,
+                                      unidades: unidades,
+                                      almacenes: almacenes,
+                                    ),
+                                    onDelete: () => _deleteProducto(
+                                      id,
+                                      nombre,
+                                      imagenPath: imagenPath,
+                                    ),
                                   );
-                                }).toList(),
+                                },
+                              );
+                            }
+
+                            // ✅ DESKTOP: tu DataTable
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: Palette.white,
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: Palette.button.withValues(alpha: 0.35),
+                                ),
                               ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(18),
+                                child: SingleChildScrollView(
+                                  child: DataTable(
+                                    headingRowHeight: 52,
+                                    dataRowMinHeight: 64,
+                                    dataRowMaxHeight: 84,
+                                    columnSpacing: 18,
+                                    headingTextStyle: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      color: Palette.ink,
+                                    ),
+                                    columns: const [
+                                      DataColumn(label: Text('Imagen')),
+                                      DataColumn(label: Text('Código')),
+                                      DataColumn(label: Text('Nombre')),
+                                      DataColumn(label: Text('Descripción')),
+                                      DataColumn(label: Text('Tipo')),
+                                      DataColumn(label: Text('Unidad')),
+                                      DataColumn(label: Text('Stock')),
+                                      DataColumn(label: Text('Precio')),
+                                      DataColumn(label: Text('Acciones')),
+                                    ],
+                                    rows: filtered.map((p) {
+                                      final id = p.id;
+                                      final codigo = p.codigo;
+                                      final nombre = p.nombre;
+                                      final tipoItem = p.tipoItem;
+                                      final unidadNombre = p.unidadNombre;
+                                      final desc = p.descripcion;
+                                      final stock = p.stock;
+                                      final precio = p.precio;
+                                      final imagenUrl = p.imagenUrl.trim();
+                                      final imagenPath = p.imagenPath.trim();
+
+                                      return DataRow(
+                                        cells: [
+                                          DataCell(
+                                            InkWell(
+                                              onTap: (imagenPath.isEmpty && imagenUrl.isEmpty)
+                                                  ? null
+                                                  : () => _openImageViewer(
+                                                        title: nombre,
+                                                        imagenPath: imagenPath,
+                                                        imagenUrl: imagenUrl,
+                                                      ),
+                                              child: _ProductoThumb(
+                                                imagenPath: imagenPath,
+                                                imagenUrl: imagenUrl,
+                                              ),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Text(
+                                              codigo.isEmpty ? '-' : codigo,
+                                              style: const TextStyle(fontWeight: FontWeight.w700),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            SizedBox(
+                                              width: 240,
+                                              child: Text(
+                                                nombre.isEmpty ? '-' : nombre,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(fontWeight: FontWeight.w700),
+                                              ),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            SizedBox(
+                                              width: 320,
+                                              child: Text(
+                                                desc.trim().isEmpty ? '-' : desc.trim(),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  color: Palette.ink.withValues(alpha: 0.85),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          DataCell(_ChipTipo(tipoItem: tipoItem)),
+                                          DataCell(Text(unidadNombre.isEmpty ? '-' : unidadNombre)),
+                                          DataCell(Text(stock.toString())),
+                                          DataCell(Text(precio.toStringAsFixed(2))),
+                                          DataCell(
+                                            Row(
+                                              children: [
+                                                IconButton(
+                                                  tooltip: 'Editar',
+                                                  onPressed: () => _openEditDialog(
+                                                    id: id,
+                                                    product: p,
+                                                    unidades: unidades,
+                                                    almacenes: almacenes,
+                                                  ),
+                                                  icon: Icon(Icons.edit_rounded, color: Palette.primary),
+                                                ),
+                                                IconButton(
+                                                  tooltip: 'Eliminar',
+                                                  onPressed: () => _deleteProducto(
+                                                    id,
+                                                    nombre,
+                                                    imagenPath: imagenPath,
+                                                  ),
+                                                  icon: Icon(
+                                                    Icons.delete_outline_rounded,
+                                                    color: Palette.statsDanger.withValues(alpha: 0.95),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             );
           },
         );
@@ -712,7 +836,6 @@ class _ChipTipo extends StatelessWidget {
   }
 }
 
-// ✅ Miniatura: WEB usa bytes, móvil usa Image.network
 class _ProductoThumb extends StatelessWidget {
   final String imagenPath;
   final String imagenUrl;
@@ -730,10 +853,7 @@ class _ProductoThumb extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Center(
-        child: Icon(
-          Icons.image_outlined,
-          color: Palette.ink.withValues(alpha: 0.35),
-        ),
+        child: Icon(Icons.image_outlined, color: Palette.ink.withValues(alpha: 0.35)),
       ),
     );
 
@@ -748,6 +868,245 @@ class _ProductoThumb extends StatelessWidget {
         height: 54,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => placeholder,
+      ),
+    );
+  }
+}
+
+// =================== MOBILE CARD ===================
+
+class _ProductoCardMobile extends StatelessWidget {
+  const _ProductoCardMobile({
+    required this.nombre,
+    required this.codigo,
+    required this.tipoItem,
+    required this.unidadNombre,
+    required this.descripcion,
+    required this.stock,
+    required this.precio,
+    required this.imagenUrl,
+    required this.onTapImage,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final String nombre;
+  final String codigo;
+  final String tipoItem;
+  final String unidadNombre;
+  final String descripcion;
+  final int stock;
+  final double precio;
+  final String imagenUrl;
+
+  final VoidCallback? onTapImage;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Palette.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Palette.button.withValues(alpha: 0.22)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                InkWell(
+                  onTap: onTapImage,
+                  borderRadius: BorderRadius.circular(14),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: SizedBox(
+                      width: 74,
+                      height: 74,
+                      child: imagenUrl.trim().isEmpty
+                          ? Container(
+                              color: Palette.fieldBg,
+                              child: Icon(Icons.image_outlined,
+                                  color: Palette.ink.withValues(alpha: 0.25)),
+                            )
+                          : Image.network(
+                              imagenUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: Palette.fieldBg,
+                                child: Icon(Icons.broken_image_rounded,
+                                    color: Palette.statsDanger.withValues(alpha: 0.9)),
+                              ),
+                            ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        (nombre.trim().isEmpty ? '-' : nombre.trim()),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          color: Palette.ink,
+                          fontSize: 14.5,
+                          height: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          if (codigo.trim().isNotEmpty)
+                            Flexible(
+                              child: Text(
+                                'Código: $codigo',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Palette.ink.withValues(alpha: 0.65),
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          if (codigo.trim().isNotEmpty) const SizedBox(width: 8),
+                          _ChipTipo(tipoItem: tipoItem),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            if (descripcion.trim().isNotEmpty)
+              Text(
+                descripcion.trim(),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Palette.ink.withValues(alpha: 0.78),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                  height: 1.15,
+                ),
+              )
+            else
+              Text(
+                'Sin descripción',
+                style: TextStyle(
+                  color: Palette.ink.withValues(alpha: 0.55),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                ),
+              ),
+
+            const SizedBox(height: 10),
+
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              children: [
+                _MiniInfoChip(label: 'Unidad', value: unidadNombre.isEmpty ? '-' : unidadNombre),
+                _MiniInfoChip(label: 'Stock', value: stock.toString()),
+                _MiniInfoChip(label: 'Precio', value: 'Bs ${precio.toStringAsFixed(2)}'),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_rounded, size: 18),
+                    label: const Text('Editar'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Palette.primary,
+                      side: BorderSide(color: Palette.primary.withValues(alpha: 0.35)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                    label: const Text('Eliminar'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Palette.statsDanger.withValues(alpha: 0.95),
+                      side: BorderSide(
+                        color: Palette.statsDanger.withValues(alpha: 0.35),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniInfoChip extends StatelessWidget {
+  const _MiniInfoChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Palette.fieldBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Palette.button.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$label: ',
+            style: TextStyle(
+              color: Palette.ink.withValues(alpha: 0.65),
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Palette.ink,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }

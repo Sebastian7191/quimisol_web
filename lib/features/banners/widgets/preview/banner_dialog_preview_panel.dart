@@ -1,4 +1,3 @@
-// lib/features/banners/widgets/preview/banner_dialog_preview_panel.dart
 import 'package:flutter/material.dart';
 import 'package:quimisol_web/core/theme/palette.dart';
 import 'package:quimisol_web/features/banners/controllers/banners_dialog_controller.dart';
@@ -55,68 +54,75 @@ class BannerDialogPreviewPanel extends StatelessWidget {
               final t = controller.tituloCtrl.text.trim();
               final s = controller.subtituloCtrl.text.trim();
 
-              final url = controller.previewUrl; // custom subida o imagen del producto
+              final url = controller.previewUrl;
               final bytes = controller.previewBytes;
 
-              // ✅ (1) Esto controla el "tamaño" del teléfono
-              //    Más chico => más espacio a los lados
-              const double phoneWidth = 280;
+              return LayoutBuilder(
+                builder: (context, c) {
+                  // espacio lateral “bonito” pero que no rompa en angosto
+                  final sidePad = (c.maxWidth < 360) ? 12.0 : 44.0;
 
-              return Center(
-                // ✅ (2) Esto crea MÁS ESPACIO a los costados del teléfono
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 44),
-                  child: SizedBox(
-                    width: phoneWidth,
-                    child: BannerPhonePreviewFrame(
-                      title: 'Vista previa móvil',
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          // ancho máximo de la card dentro del teléfono
-                          final cardW = (constraints.maxWidth * 0.98).clamp(240.0, 280.0);
+                  final available = (c.maxWidth - (sidePad * 2)).clamp(220.0, 600.0);
+                  final phoneWidth = available.clamp(240.0, 280.0);
 
-                          return ColoredBox(
-                            color: Palette.white,
-                            child: ScrollConfiguration(
-                              behavior: const _NoScrollbarScrollBehavior(),
-                              child: SingleChildScrollView(
-                                physics: const ClampingScrollPhysics(),
-                                padding: const EdgeInsets.only(top: 10),
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                                  child: IntrinsicHeight(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                                      children: [
-                                        Align(
-                                          alignment: Alignment.topCenter,
-                                          child: ConstrainedBox(
-                                            constraints: BoxConstraints(maxWidth: cardW),
-                                            child: SizedBox(
-                                              height: 130,
-                                              child: BannerCardBodyPreview(
-                                                titulo: t.isEmpty ? 'Banner' : t,
-                                                subtitulo: s.isEmpty ? '-' : s,
-                                                imageUrl: url,
-                                                pickedBytes: bytes,
+                  return Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: sidePad),
+                      child: SizedBox(
+                        width: phoneWidth,
+                        child: BannerPhonePreviewFrame(
+                          title: 'Vista previa móvil',
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final cardW = (constraints.maxWidth * 0.98)
+                                  .clamp(220.0, phoneWidth);
+
+                              return ColoredBox(
+                                color: Palette.white,
+                                child: ScrollConfiguration(
+                                  behavior: const _NoScrollbarScrollBehavior(),
+                                  child: SingleChildScrollView(
+                                    physics: const ClampingScrollPhysics(),
+                                    padding: const EdgeInsets.only(top: 10),
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        minHeight: constraints.maxHeight,
+                                      ),
+                                      child: IntrinsicHeight(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                                          children: [
+                                            Align(
+                                              alignment: Alignment.topCenter,
+                                              child: ConstrainedBox(
+                                                constraints: BoxConstraints(maxWidth: cardW),
+                                                child: SizedBox(
+                                                  height: 130,
+                                                  child: BannerCardBodyPreview(
+                                                    titulo: t.isEmpty ? 'Banner' : t,
+                                                    subtitulo: s.isEmpty ? '-' : s,
+                                                    imageUrl: url,
+                                                    pickedBytes: bytes,
+                                                  ),
+                                                ),
                                               ),
                                             ),
-                                          ),
+                                            const SizedBox(height: 10),
+                                            const Expanded(child: SizedBox()),
+                                          ],
                                         ),
-                                        const SizedBox(height: 10),
-                                        const Expanded(child: SizedBox()),
-                                      ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          );
-                        },
+                              );
+                            },
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
               );
             },
           ),

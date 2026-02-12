@@ -1,4 +1,3 @@
-// lib/features/banners/widgets/dialog/banner_dialog.dart
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -8,7 +7,6 @@ import 'package:quimisol_web/core/theme/palette.dart';
 import 'package:quimisol_web/features/banners/controllers/banners_dialog_controller.dart';
 import 'package:quimisol_web/features/banners/widgets/dialog/form_result.dart';
 
-import 'package:quimisol_web/features/banners/widgets/dialog/product_autocomplete_field.dart';
 import 'package:quimisol_web/features/banners/widgets/dialog/product_list_selector.dart';
 import 'package:quimisol_web/features/banners/widgets/preview/banner_dialog_preview_panel.dart';
 
@@ -53,7 +51,6 @@ class _BannerDialogState extends State<BannerDialog> {
       initialIdProducto: widget.initialIdProducto ?? '',
     );
 
-    // cargar productos para el combo buscador
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await controller.loadProducts();
       if (mounted) setState(() {});
@@ -67,11 +64,9 @@ class _BannerDialogState extends State<BannerDialog> {
   }
 
   Future<void> _pickAndUploadImage() async {
-    // pick bytes (web)
     final Uint8List? bytes = await ImagePickerWeb.getImageAsBytes();
     if (bytes == null) return;
 
-    // intenta adivinar extensión simple (si no, jpg)
     final ext = 'jpg';
 
     try {
@@ -92,7 +87,6 @@ class _BannerDialogState extends State<BannerDialog> {
     if (_saving) return;
     if (!_formKey.currentState!.validate()) return;
 
-    // ✅ mínimo: título, subtítulo y producto seleccionado
     if (!controller.validateBasic()) return;
 
     setState(() => _saving = true);
@@ -102,20 +96,25 @@ class _BannerDialogState extends State<BannerDialog> {
       BannerFormResult(
         titulo: controller.tituloCtrl.text,
         subtitulo: controller.subtituloCtrl.text,
-        imagen: controller.finalImagenUrl, // ✅ auto: custom o imagen producto
+        imagen: controller.finalImagenUrl,
         estado: controller.estado,
-        idproducto: controller.idProductoCtrl.text, // ✅ id del producto elegido
+        idproducto: controller.idProductoCtrl.text,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+
+    final maxW = media.size.width < 1280 ? media.size.width - 24 : 1240.0;
+    final maxH = (media.size.height * 0.92).clamp(520.0, 920.0);
+
     return Dialog(
       backgroundColor: Palette.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1240),
+        constraints: BoxConstraints(maxWidth: maxW, maxHeight: maxH),
         child: Padding(
           padding: const EdgeInsets.all(18),
           child: Column(
@@ -132,91 +131,78 @@ class _BannerDialogState extends State<BannerDialog> {
               ),
               const SizedBox(height: 14),
 
-              LayoutBuilder(
-                builder: (context, c) {
-                  final isWide = c.maxWidth >= 920;
+              // ✅ zona scrolleable para que nunca haga overflow vertical
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    final isWide = c.maxWidth >= 920;
 
-                  final form = _FormCard(
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        children: [
-                          TextFormField(
-                            controller: controller.tituloCtrl,
-                            decoration: InputDecoration(
-                              labelText: 'Título (Ej: descuentos)',
-                              filled: true,
-                              fillColor: Palette.fieldBg,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
+                    final form = _FormCard(
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            TextFormField(
+                              controller: controller.tituloCtrl,
+                              decoration: InputDecoration(
+                                labelText: 'Título (Ej: descuentos)',
+                                filled: true,
+                                fillColor: Palette.fieldBg,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
                               ),
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Ingresa un título';
+                                }
+                                if (v.trim().length < 2) return 'Mínimo 2 caracteres';
+                                return null;
+                              },
                             ),
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) {
-                                return 'Ingresa un título';
-                              }
-                              if (v.trim().length < 2)
-                                return 'Mínimo 2 caracteres';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: controller.subtituloCtrl,
-                            decoration: InputDecoration(
-                              labelText: 'Subtítulo (Ej: 20%)',
-                              filled: true,
-                              fillColor: Palette.fieldBg,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: controller.subtituloCtrl,
+                              decoration: InputDecoration(
+                                labelText: 'Subtítulo (Ej: 20%)',
+                                filled: true,
+                                fillColor: Palette.fieldBg,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
                               ),
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Ingresa un subtítulo';
+                                }
+                                return null;
+                              },
                             ),
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) {
-                                return 'Ingresa un subtítulo';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
+                            const SizedBox(height: 12),
 
-                          // ✅ Combo buscador de producto (con imagen)
-                          ProductListSelector(
-                            products: controller.products,
-                            selected: controller.selectedProduct,
-                            enabled: !controller.loadingProducts,
-                            onSelected: (p) =>
-                                setState(() => controller.selectProduct(p)),
-                            height: 300,
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          // ✅ Imagen: no URL; usa producto o sube
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Palette.fieldBg,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: Palette.button.withValues(alpha: 0.25),
-                              ),
+                            ProductListSelector(
+                              products: controller.products,
+                              selected: controller.selectedProduct,
+                              enabled: !controller.loadingProducts,
+                              onSelected: (p) => setState(() => controller.selectProduct(p)),
+                              height: 300,
                             ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // LEFT: acciones
-                                Expanded(
+
+                            const SizedBox(height: 12),
+
+                            // ✅ Imagen (Row->Column en angosto)
+                            LayoutBuilder(
+                              builder: (context, ic) {
+                                final compact = ic.maxWidth < 640;
+
+                                final left = Expanded(
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         'Imagen del banner',
                                         style: TextStyle(
-                                          color: Palette.ink.withValues(
-                                            alpha: 0.85,
-                                          ),
+                                          color: Palette.ink.withValues(alpha: 0.85),
                                           fontWeight: FontWeight.w900,
                                         ),
                                       ),
@@ -226,9 +212,7 @@ class _BannerDialogState extends State<BannerDialog> {
                                             ? 'Se usará la imagen del producto (si eliges uno) o puedes subir una.'
                                             : 'Imagen lista ✅ (producto o subida)',
                                         style: TextStyle(
-                                          color: Palette.ink.withValues(
-                                            alpha: 0.65,
-                                          ),
+                                          color: Palette.ink.withValues(alpha: 0.65),
                                           fontWeight: FontWeight.w700,
                                         ),
                                       ),
@@ -238,60 +222,42 @@ class _BannerDialogState extends State<BannerDialog> {
                                         runSpacing: 10,
                                         children: [
                                           OutlinedButton.icon(
-                                            onPressed: controller.uploadingImage
-                                                ? null
-                                                : _pickAndUploadImage,
-                                            icon: const Icon(
-                                              Icons.upload_rounded,
-                                            ),
+                                            onPressed: controller.uploadingImage ? null : _pickAndUploadImage,
+                                            icon: const Icon(Icons.upload_rounded),
                                             label: Text(
-                                              controller.uploadingImage
-                                                  ? 'Subiendo...'
-                                                  : 'Subir imagen',
+                                              controller.uploadingImage ? 'Subiendo...' : 'Subir imagen',
                                             ),
                                             style: OutlinedButton.styleFrom(
                                               foregroundColor: Palette.ink,
                                               side: BorderSide(
-                                                color: Palette.button
-                                                    .withValues(alpha: 0.55),
+                                                color: Palette.button.withValues(alpha: 0.55),
                                               ),
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 14,
-                                                    vertical: 12,
-                                                  ),
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 14,
+                                                vertical: 12,
+                                              ),
                                               shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(14),
+                                                borderRadius: BorderRadius.circular(14),
                                               ),
                                             ),
                                           ),
                                           OutlinedButton.icon(
                                             onPressed: controller.uploadingImage
                                                 ? null
-                                                : () => setState(
-                                                    controller.clearCustomImage,
-                                                  ),
-                                            icon: const Icon(
-                                              Icons.restore_rounded,
-                                            ),
-                                            label: const Text(
-                                              'Usar imagen del producto',
-                                            ),
+                                                : () => setState(controller.clearCustomImage),
+                                            icon: const Icon(Icons.restore_rounded),
+                                            label: const Text('Usar imagen del producto'),
                                             style: OutlinedButton.styleFrom(
                                               foregroundColor: Palette.ink,
                                               side: BorderSide(
-                                                color: Palette.button
-                                                    .withValues(alpha: 0.35),
+                                                color: Palette.button.withValues(alpha: 0.35),
                                               ),
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 14,
-                                                    vertical: 12,
-                                                  ),
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 14,
+                                                vertical: 12,
+                                              ),
                                               shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(14),
+                                                borderRadius: BorderRadius.circular(14),
                                               ),
                                             ),
                                           ),
@@ -299,83 +265,114 @@ class _BannerDialogState extends State<BannerDialog> {
                                       ),
                                     ],
                                   ),
-                                ),
+                                );
 
-                                const SizedBox(width: 12),
-
-                                // RIGHT: preview de imagen
-                                _DialogImagePreview(
+                                final preview = _DialogImagePreview(
                                   url: controller.previewUrl,
                                   bytes: controller.previewBytes,
-                                ),
+                                );
+
+                                return Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Palette.fieldBg,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: Palette.button.withValues(alpha: 0.25),
+                                    ),
+                                  ),
+                                  child: compact
+                                      ? Column(
+                                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                                          children: [
+                                            left,
+                                            const SizedBox(height: 12),
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: SizedBox(
+                                                width: double.infinity,
+                                                child: preview,
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            left,
+                                            const SizedBox(width: 12),
+                                            preview,
+                                          ],
+                                        ),
+                                );
+                              },
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            DropdownButtonFormField<String>(
+                              value: controller.estado,
+                              items: const [
+                                DropdownMenuItem(value: 'ACTIVO', child: Text('ACTIVO')),
+                                DropdownMenuItem(value: 'INACTIVO', child: Text('INACTIVO')),
                               ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          DropdownButtonFormField<String>(
-                            value: controller.estado,
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'ACTIVO',
-                                child: Text('ACTIVO'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'INACTIVO',
-                                child: Text('INACTIVO'),
-                              ),
-                            ],
-                            onChanged: (v) => setState(
-                              () => controller.setEstado(v ?? 'ACTIVO'),
-                            ),
-                            decoration: InputDecoration(
-                              labelText: 'Estado',
-                              filled: true,
-                              fillColor: Palette.fieldBg,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
+                              onChanged: (v) => setState(() => controller.setEstado(v ?? 'ACTIVO')),
+                              decoration: InputDecoration(
+                                labelText: 'Estado',
+                                filled: true,
+                                fillColor: Palette.fieldBg,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-
-                  final preview = BannerDialogPreviewPanel(
-                    controller: controller,
-                  );
-
-                  if (!isWide) {
-                    return Column(
-                      children: [form, const SizedBox(height: 14), preview],
                     );
-                  }
 
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 6, child: form),
-                      const SizedBox(width: 14),
-                      Expanded(flex: 5, child: preview),
-                    ],
-                  );
-                },
+                    final previewPanel = BannerDialogPreviewPanel(controller: controller);
+
+                    final content = isWide
+                        ? Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 6, child: form),
+                              const SizedBox(width: 14),
+                              Expanded(flex: 5, child: previewPanel),
+                            ],
+                          )
+                        : Column(
+                            children: [
+                              form,
+                              const SizedBox(height: 14),
+                              previewPanel,
+                            ],
+                          );
+
+                    return ScrollConfiguration(
+                      behavior: const _NoScrollGlow(),
+                      child: SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
+                        child: content,
+                      ),
+                    );
+                  },
+                ),
               ),
 
               const SizedBox(height: 16),
 
-              Row(
-                children: [
-                  Expanded(
+              LayoutBuilder(
+                builder: (context, c) {
+                  final tiny = c.maxWidth < 420;
+
+                  final cancel = Expanded(
                     child: OutlinedButton(
                       onPressed: _saving ? null : () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Palette.ink,
-                        side: BorderSide(
-                          color: Palette.button.withValues(alpha: 0.55),
-                        ),
+                        side: BorderSide(color: Palette.button.withValues(alpha: 0.55)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -386,9 +383,9 @@ class _BannerDialogState extends State<BannerDialog> {
                         style: TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
+                  );
+
+                  final save = Expanded(
                     child: ElevatedButton(
                       onPressed: _saving ? null : _submit,
                       style: ElevatedButton.styleFrom(
@@ -411,8 +408,27 @@ class _BannerDialogState extends State<BannerDialog> {
                               style: TextStyle(fontWeight: FontWeight.w900),
                             ),
                     ),
-                  ),
-                ],
+                  );
+
+                  if (!tiny) {
+                    return Row(
+                      children: [
+                        cancel,
+                        const SizedBox(width: 12),
+                        save,
+                      ],
+                    );
+                  }
+
+                  // en ultra angosto, se apilan (misma UI, sin romper)
+                  return Column(
+                    children: [
+                      Row(children: [cancel]),
+                      const SizedBox(height: 12),
+                      Row(children: [save]),
+                    ],
+                  );
+                },
               ),
             ],
           ),
@@ -454,26 +470,33 @@ class _DialogImagePreview extends StatelessWidget {
     final hasBytes = bytes != null;
     final hasUrl = url.trim().isNotEmpty;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        width: 220,
-        height: 140,
-        decoration: BoxDecoration(
-          color: Palette.white,
+    return LayoutBuilder(
+      builder: (context, c) {
+        // si no hay espacio, la preview baja su ancho sin cambiar la “pinta”
+        final w = (c.maxWidth.isFinite ? c.maxWidth : 220.0).clamp(160.0, 220.0);
+
+        return ClipRRect(
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Palette.button.withValues(alpha: 0.22)),
-        ),
-        child: hasBytes
-            ? Image.memory(bytes!, fit: BoxFit.cover)
-            : (hasUrl
-                ? Image.network(
-                    url,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const _NoImgBox(),
-                  )
-                : const _NoImgBox()),
-      ),
+          child: Container(
+            width: w,
+            height: 140,
+            decoration: BoxDecoration(
+              color: Palette.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Palette.button.withValues(alpha: 0.22)),
+            ),
+            child: hasBytes
+                ? Image.memory(bytes!, fit: BoxFit.cover)
+                : (hasUrl
+                    ? Image.network(
+                        url,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const _NoImgBox(),
+                      )
+                    : const _NoImgBox()),
+          ),
+        );
+      },
     );
   }
 }
@@ -496,3 +519,15 @@ class _NoImgBox extends StatelessWidget {
   }
 }
 
+class _NoScrollGlow extends ScrollBehavior {
+  const _NoScrollGlow();
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}

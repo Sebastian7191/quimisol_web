@@ -40,12 +40,21 @@ class BannerCard extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 14, 14, 10),
                 child: LayoutBuilder(
                   builder: (context, c) {
-                    // ✅ MÁS PEQUEÑA
+                    final isMobileCard = c.maxWidth < 420;
+
+                    if (isMobileCard) {
+                      return _MobileBody(
+                        titulo: titulo,
+                        subtitulo: subtitulo,
+                        imagen: imagen,
+                      );
+                    }
+
+                    // Desktop/Tablet: mismo layout horizontal, SIN botón "Ver más"
                     final imageW = (c.maxWidth * 0.34).clamp(130.0, 200.0);
 
                     return Row(
                       children: [
-                        // LEFT
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,48 +82,11 @@ class BannerCard extends StatelessWidget {
                                 ),
                               ),
                               const Spacer(),
-                              _PrimaryButton(
-                                text: 'Ver más',
-                                onTap: () {},
-                              ),
                             ],
                           ),
                         ),
-
                         const SizedBox(width: 12),
-
-                        // RIGHT IMAGE
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(18),
-                          child: SizedBox(
-                            width: imageW,
-                            height: double.infinity,
-                            child: imagen.trim().isEmpty
-                                ? Container(
-                                    color: Colors.black12,
-                                    child: Center(
-                                      child: Icon(
-                                        Icons.image_not_supported_rounded,
-                                        color: Palette.ink.withValues(alpha: 0.55),
-                                      ),
-                                    ),
-                                  )
-                                : Image.network(
-                                    imagen,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      color: Colors.black12,
-                                      child: Center(
-                                        child: Icon(
-                                          Icons.broken_image_rounded,
-                                          color: Palette.statsDanger
-                                              .withValues(alpha: 0.9),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                          ),
-                        ),
+                        _RightImage(imagen: imagen, width: imageW),
                       ],
                     );
                   },
@@ -132,24 +104,35 @@ class BannerCard extends StatelessWidget {
                   top: BorderSide(color: Palette.button.withValues(alpha: 0.16)),
                 ),
               ),
-              child: Row(
-                children: [
-                  _EstadoChip(isActivo: isActivo),
-                  const Spacer(),
-                  _IconAction(
-                    tooltip: 'Editar',
-                    icon: Icons.edit_rounded,
-                    color: Palette.primary,
-                    onTap: onEdit,
-                  ),
-                  const SizedBox(width: 10),
-                  _IconAction(
-                    tooltip: 'Eliminar',
-                    icon: Icons.delete_outline_rounded,
-                    color: Palette.statsDanger.withValues(alpha: 0.95),
-                    onTap: onDelete,
-                  ),
-                ],
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  return FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: SizedBox(
+                      width: c.maxWidth,
+                      child: Row(
+                        children: [
+                          _EstadoChip(isActivo: isActivo),
+                          const Spacer(),
+                          _IconAction(
+                            tooltip: 'Editar',
+                            icon: Icons.edit_rounded,
+                            color: Palette.primary,
+                            onTap: onEdit,
+                          ),
+                          const SizedBox(width: 10),
+                          _IconAction(
+                            tooltip: 'Eliminar',
+                            icon: Icons.delete_outline_rounded,
+                            color: Palette.statsDanger.withValues(alpha: 0.95),
+                            onTap: onDelete,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -159,34 +142,126 @@ class BannerCard extends StatelessWidget {
   }
 }
 
-class _PrimaryButton extends StatelessWidget {
-  final String text;
-  final VoidCallback onTap;
+class _MobileBody extends StatelessWidget {
+  final String titulo;
+  final String subtitulo;
+  final String imagen;
 
-  const _PrimaryButton({required this.text, required this.onTap});
+  const _MobileBody({
+    required this.titulo,
+    required this.subtitulo,
+    required this.imagen,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-          decoration: BoxDecoration(
-            color: Palette.primary.withValues(alpha: 0.85),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Text(
-            text,
-            style: const TextStyle(
-              color: Palette.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 13,
+    return LayoutBuilder(
+      builder: (context, c) {
+        final imgH = (c.maxWidth * 0.52).clamp(140.0, 190.0);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: SizedBox(
+                width: double.infinity,
+                height: imgH,
+                child: imagen.trim().isEmpty
+                    ? Container(
+                        color: Colors.black12,
+                        child: Center(
+                          child: Icon(
+                            Icons.image_not_supported_rounded,
+                            color: Palette.ink.withValues(alpha: 0.55),
+                          ),
+                        ),
+                      )
+                    : Image.network(
+                        imagen,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: Colors.black12,
+                          child: Center(
+                            child: Icon(
+                              Icons.broken_image_rounded,
+                              color: Palette.statsDanger.withValues(alpha: 0.9),
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
             ),
-          ),
-        ),
+            const SizedBox(height: 12),
+            Text(
+              titulo.isEmpty ? 'Banner' : titulo,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: Palette.ink,
+                height: 1.05,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              subtitulo.isEmpty ? '-' : subtitulo,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Palette.ink.withValues(alpha: 0.62),
+              ),
+            ),
+            const Spacer(),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _RightImage extends StatelessWidget {
+  final String imagen;
+  final double width;
+
+  const _RightImage({
+    required this.imagen,
+    required this.width,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(
+        width: width,
+        height: double.infinity,
+        child: imagen.trim().isEmpty
+            ? Container(
+                color: Colors.black12,
+                child: Center(
+                  child: Icon(
+                    Icons.image_not_supported_rounded,
+                    color: Palette.ink.withValues(alpha: 0.55),
+                  ),
+                ),
+              )
+            : Image.network(
+                imagen,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  color: Colors.black12,
+                  child: Center(
+                    child: Icon(
+                      Icons.broken_image_rounded,
+                      color: Palette.statsDanger.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ),
+              ),
       ),
     );
   }

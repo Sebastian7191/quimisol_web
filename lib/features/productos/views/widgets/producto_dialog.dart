@@ -11,7 +11,6 @@ import 'package:quimisol_web/features/productos/data/almacen_option.dart';
 import 'package:quimisol_web/features/productos/data/unidad_option.dart';
 
 import 'package:quimisol_web/features/productos/views/widgets/dialogs/producto_dialog_form.dart';
-
 import 'package:quimisol_web/features/productos/views/widgets/dialogs/producto_dialog_preview_panel.dart';
 import 'package:quimisol_web/features/productos/views/widgets/dialogs/producto_dialog_top_bar.dart';
 import 'package:quimisol_web/features/productos/views/widgets/dialogs/producto_dialog_ui.dart';
@@ -62,7 +61,9 @@ class ProductoDialog extends StatefulWidget {
 
 class _ProductoDialogState extends State<ProductoDialog> {
   final _formKey = GlobalKey<FormState>();
-  final ScrollController _formScrollCtrl = ScrollController();
+
+  /// ✅ ahora lo usamos como scroll GENERAL en móvil
+  final ScrollController _scrollCtrl = ScrollController();
 
   late final ctrl.ProductoDialogController c;
 
@@ -98,7 +99,7 @@ class _ProductoDialogState extends State<ProductoDialog> {
 
   @override
   void dispose() {
-    _formScrollCtrl.dispose();
+    _scrollCtrl.dispose();
     c.dispose();
     super.dispose();
   }
@@ -142,32 +143,35 @@ class _ProductoDialogState extends State<ProductoDialog> {
                   onClose: () => Navigator.pop(context),
                 ),
                 const SizedBox(height: 14),
+
+                /// ✅ CONTENIDO
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, box) {
                       final isWide = box.maxWidth >= 980;
 
-                      final formScrollable = Scrollbar(
-                        controller: _formScrollCtrl,
-                        thumbVisibility: true,
-                        child: SingleChildScrollView(
-                          controller: _formScrollCtrl,
-                          padding: const EdgeInsets.only(right: 6),
-                          child: ProductoDialogForm(
-                            formKey: _formKey,
-                            controller: c,
-                            unidades: widget.unidades,
-                            almacenes: widget.almacenes,
-                          ),
-                        ),
-                      );
-
-                      final previewPanel = SizedBox(
-                        width: 360,
-                        child: ProductoDialogPreviewPanel(controller: c),
-                      );
-
+                      // ====== DESKTOP/TABLET (igual que antes) ======
                       if (isWide) {
+                        final formScrollable = Scrollbar(
+                          controller: _scrollCtrl,
+                          thumbVisibility: true,
+                          child: SingleChildScrollView(
+                            controller: _scrollCtrl,
+                            padding: const EdgeInsets.only(right: 6),
+                            child: ProductoDialogForm(
+                              formKey: _formKey,
+                              controller: c,
+                              unidades: widget.unidades,
+                              almacenes: widget.almacenes,
+                            ),
+                          ),
+                        );
+
+                        final previewPanel = SizedBox(
+                          width: 360,
+                          child: ProductoDialogPreviewPanel(controller: c),
+                        );
+
                         return Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -181,17 +185,48 @@ class _ProductoDialogState extends State<ProductoDialog> {
                         );
                       }
 
-                      return Column(
-                        children: [
-                          ProductoDialogPreviewPanel(controller: c),
-                          const SizedBox(height: 14),
-                          Expanded(child: formScrollable),
-                        ],
+                      // ====== MÓVIL (FIX OVERFLOW) ======
+                      // ✅ Un SOLO scroll que contiene:
+                      //   1) formulario (arriba)
+                      //   2) preview teléfono (abajo)
+                      // ✅ botones quedan fijos abajo (fuera del scroll)
+                      return Scrollbar(
+                        controller: _scrollCtrl,
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          controller: _scrollCtrl,
+                          padding: const EdgeInsets.only(right: 6),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              ProductoDialogForm(
+                                formKey: _formKey,
+                                controller: c,
+                                unidades: widget.unidades,
+                                almacenes: widget.almacenes,
+                              ),
+                              const SizedBox(height: 14),
+
+                              // ✅ preview al final, abajo
+                              Center(
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 380),
+                                  child: ProductoDialogPreviewPanel(controller: c),
+                                ),
+                              ),
+
+                              const SizedBox(height: 10),
+                            ],
+                          ),
+                        ),
                       );
                     },
                   ),
                 ),
+
                 const SizedBox(height: 12),
+
+                /// ✅ BOTONES (quedan fijos, ya no los tapa el teléfono)
                 Row(
                   children: [
                     Expanded(

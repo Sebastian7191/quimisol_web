@@ -1,16 +1,11 @@
 // lib/features/shell/sidebar_shell_page.dart
 //
-// ✅ Agregado "Pedidos" al sidebar + pages
-// ✅ IndexFromPath actualizado para /pedidos
-// ✅ NUEVO: Categorías agregado al sidebar + pages
-// ✅ IndexFromPath actualizado para /categorias
-// ✅ NUEVO: Banners agregado al sidebar + pages
-// ✅ IndexFromPath actualizado para /banners
-//
-// OJO: ajusta el import de CategoriasPage según dónde lo guardaste.
-// En mi ejemplo: lib/features/categorias/views/categorias.dart
+// ✅ Responsive:
+// - Desktop: sidebar por hover (igual que antes)
+// - Mobile: sidebar overlay (drawer) con botón ☰ y scrim, sin achicar el contenido
 
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 
@@ -27,7 +22,7 @@ import 'package:quimisol_web/features/usuarios/views/usuarios.dart';
 // ✅ Categorías
 import 'package:quimisol_web/features/categorias/views/categorias.dart';
 
-// ✅ Banners (página real)
+// ✅ Banners
 import 'package:quimisol_web/features/banners/views/banners.dart';
 
 class SidebarShellPage extends StatefulWidget {
@@ -76,22 +71,16 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
       label: 'Unidades',
       route: '/unidades',
     ),
-
-    // ✅ CATEGORÍAS
     _SideItem(
       icon: Icons.category_rounded,
       label: 'Categorías',
       route: '/categorias',
     ),
-
-    // ✅ BANNERS
     _SideItem(
       icon: Icons.campaign_rounded,
       label: 'Banners',
       route: '/banners',
     ),
-
-    // ✅ PEDIDOS
     _SideItem(
       icon: Icons.receipt_long_rounded,
       label: 'Pedidos',
@@ -109,6 +98,19 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
     if (!_sidebarOpen) setState(() => _sidebarOpen = true);
   }
 
+  void _closeSidebar() {
+    _cancelCloseTimer();
+    if (_sidebarOpen) setState(() => _sidebarOpen = false);
+  }
+
+  void _toggleSidebar() {
+    if (_sidebarOpen) {
+      _closeSidebar();
+    } else {
+      _openSidebar();
+    }
+  }
+
   void _scheduleClose() {
     _cancelCloseTimer();
     _closeTimer = Timer(const Duration(milliseconds: 160), () {
@@ -120,17 +122,13 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
   /// ✅ Mapea URL -> índice del sidebar
   int _indexFromPath(String path) {
     if (path.startsWith('/usuarios')) return 1;
-    if (path.startsWith('/almacenes')) return 2; // incluye /almacenes/:id
+    if (path.startsWith('/almacenes')) return 2;
     if (path.startsWith('/productos')) return 3;
     if (path.startsWith('/unidades')) return 4;
-
     if (path.startsWith('/categorias')) return 5;
-
     if (path.startsWith('/banners')) return 6;
-
     if (path.startsWith('/pedidos')) return 7;
-
-    return 0; // dashboard por defecto
+    return 0;
   }
 
   void _syncIndexWithPath(String path) {
@@ -142,18 +140,16 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
 
   void _goTo(int index) {
     setState(() => _currentIndex = index);
-    // ❌ NO navegar aquí para evitar remount / sensación de otra página
+    // ❌ No navegar aquí (tu decisión original)
   }
 
   @override
   void initState() {
     super.initState();
 
-    // ✅ primera sincronización post-frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final p = Modular.to.path;
 
-      // Si entras a "/" -> mandamos a dashboard
       if (p == '/' || p.isEmpty) {
         Modular.to.navigate('/dashboard');
         _syncIndexWithPath('/dashboard');
@@ -162,7 +158,6 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
       }
     });
 
-    // ✅ si cambias URL manualmente o recargas
     Modular.to.addListener(() {
       if (!mounted) return;
       _syncIndexWithPath(Modular.to.path);
@@ -183,67 +178,168 @@ class _SidebarShellPageState extends State<SidebarShellPage> {
       const AlmacenesPage(),
       const ProductosPage(),
       const UnidadesPage(),
-
       const CategoriasPage(),
-
-      // ✅ BANNERS (real)
       const BannersPage(),
-
       const PedidosPage(),
     ];
 
-    return Scaffold(
-      backgroundColor: Palette.fieldBg,
-      body: Row(
-        children: [
-          /// 🔹 TRIGGER (borde izquierdo)
-          MouseRegion(
-            onEnter: (_) {
-              _hoveringTrigger = true;
-              _openSidebar();
-            },
-            onExit: (_) {
-              _hoveringTrigger = false;
-              _scheduleClose();
-            },
-            child: const SizedBox(width: 6, height: double.infinity),
-          ),
+    return LayoutBuilder(
+      builder: (context, c) {
+        final w = c.maxWidth;
 
-          /// 🔹 SIDEBAR (pegado a la izquierda)
-          MouseRegion(
-            onEnter: (_) {
-              _hoveringSidebar = true;
-              _openSidebar();
-            },
-            onExit: (_) {
-              _hoveringSidebar = false;
-              _scheduleClose();
-            },
-            child: _Sidebar(
-              isOpen: _sidebarOpen,
-              currentIndex: _currentIndex,
-              items: _items,
-              mainColor: _main,
-              accentColor: _accent,
-              onChanged: _goTo,
+        // ✅ Breakpoint: aquí decides qué consideras "móvil"
+        final isMobile = w < 900;
+
+        // ✅ Ancho del drawer en móvil (no ocupa todo)
+        final double mobileSidebarW =
+            math.min(288.0, (w * 0.82)).clamp(240.0, 320.0);
+
+        final body = Padding(
+          padding: EdgeInsets.all(isMobile ? 10 : 14),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              color: Palette.white,
+              child: pages[_currentIndex],
             ),
           ),
+        );
 
-          /// 🔹 BODY (siempre visible)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Container(
-                  color: Palette.white,
-                  child: pages[_currentIndex],
-                ),
+        // ===================== MOBILE =====================
+        if (isMobile) {
+          return Scaffold(
+            backgroundColor: Palette.fieldBg,
+            body: SafeArea(
+              child: Stack(
+                children: [
+                  // BODY full width (ya no se achica)
+                  Positioned.fill(child: body),
+
+                  // Botón flotante para abrir sidebar
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: _toggleSidebar,
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Palette.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: _main.withValues(alpha: 0.35),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 18,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            _sidebarOpen
+                                ? Icons.close_rounded
+                                : Icons.menu_rounded,
+                            color: Palette.primary,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Scrim (cerrar tocando afuera)
+                  if (_sidebarOpen)
+                    Positioned.fill(
+                      child: GestureDetector(
+                        onTap: _closeSidebar,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          color: Colors.black.withValues(alpha: 0.25),
+                        ),
+                      ),
+                    ),
+
+                  // Sidebar overlay
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    top: 0,
+                    bottom: 0,
+                    left: _sidebarOpen ? 0 : -mobileSidebarW - 10,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: _Sidebar(
+                        isOpen: true, // overlay siempre abierto (labels visibles)
+                        currentIndex: _currentIndex,
+                        items: _items,
+                        mainColor: _main,
+                        accentColor: _accent,
+                        onChanged: (i) {
+                          _goTo(i);
+                          _closeSidebar(); // ✅ en móvil se cierra al elegir
+                        },
+                        openWidth: mobileSidebarW,
+                        closedWidth: 86,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
+          );
+        }
+
+        // ===================== DESKTOP (igual que antes) =====================
+        return Scaffold(
+          backgroundColor: Palette.fieldBg,
+          body: Row(
+            children: [
+              /// 🔹 TRIGGER (borde izquierdo)
+              MouseRegion(
+                onEnter: (_) {
+                  _hoveringTrigger = true;
+                  _openSidebar();
+                },
+                onExit: (_) {
+                  _hoveringTrigger = false;
+                  _scheduleClose();
+                },
+                child: const SizedBox(width: 6, height: double.infinity),
+              ),
+
+              /// 🔹 SIDEBAR (pegado a la izquierda)
+              MouseRegion(
+                onEnter: (_) {
+                  _hoveringSidebar = true;
+                  _openSidebar();
+                },
+                onExit: (_) {
+                  _hoveringSidebar = false;
+                  _scheduleClose();
+                },
+                child: _Sidebar(
+                  isOpen: _sidebarOpen,
+                  currentIndex: _currentIndex,
+                  items: _items,
+                  mainColor: _main,
+                  accentColor: _accent,
+                  onChanged: _goTo,
+                  openWidth: 288,
+                  closedWidth: 86,
+                ),
+              ),
+
+              /// 🔹 BODY
+              Expanded(child: body),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -268,6 +364,10 @@ class _Sidebar extends StatelessWidget {
   final Color accentColor;
   final ValueChanged<int> onChanged;
 
+  // ✅ ahora configurable para responsive
+  final double openWidth;
+  final double closedWidth;
+
   const _Sidebar({
     required this.isOpen,
     required this.currentIndex,
@@ -275,20 +375,26 @@ class _Sidebar extends StatelessWidget {
     required this.mainColor,
     required this.accentColor,
     required this.onChanged,
+    required this.openWidth,
+    required this.closedWidth,
   });
-
-  static const double _openWidth = 288;
-  static const double _closedWidth = 86;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: isOpen ? _openWidth : _closedWidth,
+      width: isOpen ? openWidth : closedWidth,
       decoration: BoxDecoration(
         color: Palette.white,
         border: Border(
           right: BorderSide(color: mainColor.withValues(alpha: 0.55)),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -418,9 +524,7 @@ class _SidebarItemTile extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: selected
-              ? mainColor.withValues(alpha: 0.5)
-              : Colors.transparent,
+          color: selected ? mainColor.withValues(alpha: 0.5) : Colors.transparent,
         ),
       ),
       child: InkWell(

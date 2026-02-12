@@ -29,30 +29,44 @@ class ProductListSelector extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // header
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-            child: Row(
-              children: [
-                Icon(Icons.inventory_2_outlined, color: Palette.ink.withValues(alpha: 0.65)),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Producto (opcional)',
-                    style: TextStyle(fontWeight: FontWeight.w900, color: Palette.ink),
+            child: LayoutBuilder(
+              builder: (context, c) {
+                return FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(
+                    width: c.maxWidth,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.inventory_2_outlined,
+                          color: Palette.ink.withValues(alpha: 0.65),
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Producto (opcional)',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              color: Palette.ink,
+                            ),
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: (!enabled || selected == null) ? null : () => onSelected(null),
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          label: const Text('Quitar'),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                TextButton.icon(
-                  onPressed: (!enabled || selected == null) ? null : () => onSelected(null),
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                  label: const Text('Quitar'),
-                ),
-              ],
+                );
+              },
             ),
           ),
           Divider(height: 1, color: Palette.button.withValues(alpha: 0.16)),
-
-          // list
           Expanded(
             child: !enabled
                 ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
@@ -88,7 +102,7 @@ class ProductListSelector extends StatelessWidget {
                                       p.nombre.isEmpty ? '(sin nombre)' : p.nombre,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         fontWeight: FontWeight.w900,
                                         color: Palette.ink,
                                       ),

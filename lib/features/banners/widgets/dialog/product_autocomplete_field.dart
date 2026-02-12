@@ -1,4 +1,3 @@
-// lib/features/banners/widgets/dialog/product_autocomplete_field.dart
 import 'package:flutter/material.dart';
 import 'package:quimisol_web/core/theme/palette.dart';
 import 'package:quimisol_web/features/banners/controllers/banners_dialog_controller.dart';
@@ -10,19 +9,20 @@ class ProductAutocompleteField extends StatelessWidget {
     required this.selected,
     required this.onSelected,
     this.enabled = true,
-    this.requiredSelection = false, // ✅ opcional por defecto
+    this.requiredSelection = false,
   });
 
   final List<BannerProductOption> products;
   final BannerProductOption? selected;
   final ValueChanged<BannerProductOption> onSelected;
   final bool enabled;
-
-  /// si true => valida que haya producto, si false => opcional
   final bool requiredSelection;
 
   @override
   Widget build(BuildContext context) {
+    final vw = MediaQuery.sizeOf(context).width;
+    final maxPanelW = (vw - 32).clamp(260.0, 520.0);
+
     return Autocomplete<BannerProductOption>(
       initialValue: TextEditingValue(text: selected?.nombre ?? ''),
       displayStringForOption: (o) => o.nombre,
@@ -65,7 +65,7 @@ class ProductAutocompleteField extends StatelessWidget {
             color: Palette.white,
             borderRadius: BorderRadius.circular(14),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520, maxHeight: 320),
+              constraints: BoxConstraints(maxWidth: maxPanelW, maxHeight: 320),
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 itemCount: options.length,
@@ -83,7 +83,6 @@ class ProductAutocompleteField extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                       child: Row(
                         children: [
-                          // TEXT LEFT
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -112,7 +111,6 @@ class ProductAutocompleteField extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 10),
-                          // THUMB RIGHT ✅
                           _Thumb(url: img),
                         ],
                       ),

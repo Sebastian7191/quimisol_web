@@ -46,7 +46,7 @@ class BannerPhonePreviewFrame extends StatelessWidget {
               child: Stack(
                 children: [
                   Container(
-                    color: Palette.fieldBg,
+                    color: Palette.white,
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(4, 24, 4, 18),
                       child: child,

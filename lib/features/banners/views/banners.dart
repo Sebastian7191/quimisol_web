@@ -154,171 +154,292 @@ class _BannersPageState extends State<BannersPage> {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ================= HEADER =================
-          Row(
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final isNarrow = c.maxWidth < 640;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Gestión de Banners',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: Palette.ink,
-                ),
-              ),
-              const Spacer(),
-              ElevatedButton.icon(
-                onPressed: _openAddDialog,
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Agregar banner'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Palette.button,
-                  foregroundColor: Palette.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  textStyle: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 14),
-
-          // ================= BUSCADOR =================
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: controller.searchCtrl,
-                  decoration: InputDecoration(
-                    hintText: 'Buscar por título, subtítulo o idproducto...',
-                    filled: true,
-                    fillColor: Palette.fieldBg,
-                    prefixIcon: Icon(
-                      Icons.search_rounded,
-                      color: Palette.ink.withValues(alpha: 0.65),
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: Palette.button.withValues(alpha: 0.35),
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: Palette.button.withValues(alpha: 0.25),
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: Palette.primary.withValues(alpha: 0.8),
-                        width: 1.6,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                onPressed: () => controller.searchCtrl.clear(),
-                icon: const Icon(Icons.clear_rounded),
-                label: const Text('Limpiar'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Palette.ink,
-                  side: BorderSide(color: Palette.button.withValues(alpha: 0.55)),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // ================= GRID =================
-          Expanded(
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: _bannersStream(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return BannerErrorBox(
-                    message: 'Error al cargar banners: ${snapshot.error}',
-                  );
-                }
-
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const BannerLoadingGrid();
-                }
-
-                final docs = snapshot.data?.docs ?? [];
-                final items = controller.buildCards(docs);
-
-                if (items.isEmpty) {
-                  return const BannerEmptyBox(
-                    title: 'No hay banners',
-                    subtitle: 'Agrega un banner o ajusta tu búsqueda.',
-                  );
-                }
-
-                return Container(
-                  decoration: BoxDecoration(
-                    color: Palette.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: Palette.button.withValues(alpha: 0.35),
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: GridView.builder(
-                      padding: const EdgeInsets.all(14),
-                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 520, // ✅ auto columnas
-                        crossAxisSpacing: 14,
-                        mainAxisSpacing: 14,
-                        childAspectRatio: 2.65,
-                      ),
-                      itemCount: items.length,
-                      itemBuilder: (_, i) {
-                        final r = items[i];
-
-                        final docId = r['docId'] as String;
-                        final titulo = r['titulo'] as String;
-
-                        return BannerCard(
-                          titulo: titulo,
-                          subtitulo: r['subtitulo'] as String,
-                          imagen: r['imagen'] as String,
-                          estado: r['estado'] as String,
-                          onEdit: () => _openEditDialog(
-                            docId: docId,
-                            data: r,
+              // ================= HEADER =================
+              isNarrow
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Gestión de Banners',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: Palette.ink,
                           ),
-                          onDelete: () => _deleteBanner(docId, titulo),
-                        );
-                      },
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _openAddDialog,
+                            icon: const Icon(Icons.add_rounded),
+                            label: const Text('Agregar banner'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Palette.button,
+                              foregroundColor: Palette.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 18,
+                                vertical: 14,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              textStyle:
+                                  const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        const Text(
+                          'Gestión de Banners',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: Palette.ink,
+                          ),
+                        ),
+                        const Spacer(),
+                        ElevatedButton.icon(
+                          onPressed: _openAddDialog,
+                          icon: const Icon(Icons.add_rounded),
+                          label: const Text('Agregar banner'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Palette.button,
+                            foregroundColor: Palette.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            textStyle:
+                                const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+
+              const SizedBox(height: 14),
+
+              // ================= BUSCADOR =================
+              isNarrow
+                  ? Column(
+                      children: [
+                        TextField(
+                          controller: controller.searchCtrl,
+                          decoration: InputDecoration(
+                            hintText:
+                                'Buscar por título, subtítulo o idproducto...',
+                            filled: true,
+                            fillColor: Palette.fieldBg,
+                            prefixIcon: Icon(
+                              Icons.search_rounded,
+                              color: Palette.ink.withValues(alpha: 0.65),
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: Palette.button.withValues(alpha: 0.35),
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: Palette.button.withValues(alpha: 0.25),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: Palette.primary.withValues(alpha: 0.8),
+                                width: 1.6,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => controller.searchCtrl.clear(),
+                            icon: const Icon(Icons.clear_rounded),
+                            label: const Text('Limpiar'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Palette.ink,
+                              side: BorderSide(
+                                color: Palette.button.withValues(alpha: 0.55),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 14,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: controller.searchCtrl,
+                            decoration: InputDecoration(
+                              hintText:
+                                  'Buscar por título, subtítulo o idproducto...',
+                              filled: true,
+                              fillColor: Palette.fieldBg,
+                              prefixIcon: Icon(
+                                Icons.search_rounded,
+                                color: Palette.ink.withValues(alpha: 0.65),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide(
+                                  color:
+                                      Palette.button.withValues(alpha: 0.35),
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide(
+                                  color:
+                                      Palette.button.withValues(alpha: 0.25),
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide(
+                                  color:
+                                      Palette.primary.withValues(alpha: 0.8),
+                                  width: 1.6,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        OutlinedButton.icon(
+                          onPressed: () => controller.searchCtrl.clear(),
+                          icon: const Icon(Icons.clear_rounded),
+                          label: const Text('Limpiar'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Palette.ink,
+                            side: BorderSide(
+                              color: Palette.button.withValues(alpha: 0.55),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+              const SizedBox(height: 16),
+
+              // ================= GRID =================
+              Expanded(
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: _bannersStream(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return BannerErrorBox(
+                        message: 'Error al cargar banners: ${snapshot.error}',
+                      );
+                    }
+
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const BannerLoadingGrid();
+                    }
+
+                    final docs = snapshot.data?.docs ?? [];
+                    final items = controller.buildCards(docs);
+
+                    if (items.isEmpty) {
+                      return const BannerEmptyBox(
+                        title: 'No hay banners',
+                        subtitle: 'Agrega un banner o ajusta tu búsqueda.',
+                      );
+                    }
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: Palette.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: Palette.button.withValues(alpha: 0.35),
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: LayoutBuilder(
+                          builder: (context, g) {
+                            final isMobile = g.maxWidth < 560;
+
+                            return GridView.builder(
+                              padding: const EdgeInsets.all(14),
+                              gridDelegate: isMobile
+                                  ? const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 1,
+                                      mainAxisSpacing: 14,
+                                      crossAxisSpacing: 14,
+                                      mainAxisExtent: 300, // ✅ NO overflow + se ve grande
+                                    )
+                                  : const SliverGridDelegateWithMaxCrossAxisExtent(
+                                      maxCrossAxisExtent: 520,
+                                      crossAxisSpacing: 14,
+                                      mainAxisSpacing: 14,
+                                      childAspectRatio: 2.65,
+                                    ),
+                              itemCount: items.length,
+                              itemBuilder: (_, i) {
+                                final r = items[i];
+                                final docId = r['docId'] as String;
+                                final titulo = r['titulo'] as String;
+
+                                return BannerCard(
+                                  titulo: titulo,
+                                  subtitulo: r['subtitulo'] as String,
+                                  imagen: r['imagen'] as String,
+                                  estado: r['estado'] as String,
+                                  onEdit: () => _openEditDialog(
+                                    docId: docId,
+                                    data: r,
+                                  ),
+                                  onDelete: () => _deleteBanner(docId, titulo),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

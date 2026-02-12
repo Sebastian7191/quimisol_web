@@ -27,6 +27,44 @@ class ProductoDialogForm extends StatelessWidget {
     return FirebaseFirestore.instance.collection('categorias').snapshots();
   }
 
+  /// ✅ helper UI: 2 columnas -> en móvil apila en columna
+  Widget _twoColResponsive(
+    BuildContext context, {
+    required Widget left,
+    required Widget right,
+    double breakpoint = 560,
+    double gap = 12,
+  }) {
+    return LayoutBuilder(
+      builder: (_, c) {
+        final isNarrow = c.maxWidth < breakpoint;
+        if (isNarrow) {
+          return Column(
+            children: [
+              left,
+              SizedBox(height: gap),
+              right,
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: left),
+            SizedBox(width: gap),
+            Expanded(child: right),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _ellipsisItem(String text) {
+    return SizedBox(
+      width: double.infinity,
+      child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -47,12 +85,15 @@ class ProductoDialogForm extends StatelessWidget {
                 child: Column(
                   children: [
                     DropdownButtonFormField<String>(
+                      isExpanded: true, // ✅ evita overflow horizontal
                       initialValue: controller.almacenId,
                       items: almacenes
-                          .map((a) => DropdownMenuItem(
-                                value: a.id,
-                                child: Text(a.label),
-                              ))
+                          .map(
+                            (a) => DropdownMenuItem(
+                              value: a.id,
+                              child: _ellipsisItem(a.label),
+                            ),
+                          )
                           .toList(),
                       onChanged:
                           controller.saving ? null : controller.setAlmacenId,
@@ -79,6 +120,7 @@ class ProductoDialogForm extends StatelessWidget {
 
                         if (snap.connectionState == ConnectionState.waiting) {
                           return DropdownButtonFormField<String?>(
+                            isExpanded: true,
                             initialValue: controller.categoriaId,
                             items: const [],
                             onChanged: null,
@@ -106,6 +148,7 @@ class ProductoDialogForm extends StatelessWidget {
 
                         if (categorias.isEmpty) {
                           return DropdownButtonFormField<String?>(
+                            isExpanded: true,
                             initialValue: null,
                             items: const [
                               DropdownMenuItem<String?>(
@@ -122,15 +165,16 @@ class ProductoDialogForm extends StatelessWidget {
                           );
                         }
 
-                        final existsSelected =
-                            controller.categoriaId != null &&
-                                categorias.any((c) =>
-                                    c['id'] == controller.categoriaId);
+                        final existsSelected = controller.categoriaId != null &&
+                            categorias.any(
+                              (c) => c['id'] == controller.categoriaId,
+                            );
 
                         final selectedId =
                             existsSelected ? controller.categoriaId : null;
 
                         return DropdownButtonFormField<String?>(
+                          isExpanded: true,
                           initialValue: selectedId,
                           items: [
                             const DropdownMenuItem<String?>(
@@ -140,7 +184,7 @@ class ProductoDialogForm extends StatelessWidget {
                             ...categorias.map(
                               (c) => DropdownMenuItem<String?>(
                                 value: c['id'] as String,
-                                child: Text(c['nombre'] as String),
+                                child: _ellipsisItem(c['nombre'] as String),
                               ),
                             ),
                           ],
@@ -148,7 +192,6 @@ class ProductoDialogForm extends StatelessWidget {
                               ? null
                               : (id) {
                                   if (id == null) {
-                                    // ✅ YA NO FALLA: setCategoria acepta null
                                     controller.setCategoria(null, null);
                                     return;
                                   }
@@ -170,45 +213,42 @@ class ProductoDialogForm extends StatelessWidget {
 
                     ProductoDialogUI.gap(),
 
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: controller.codigoCtrl,
-                            enabled: !controller.saving,
-                            decoration: ProductoDialogUI.decor(
-                              label: 'Código',
-                              hint: 'Opcional',
-                              prefixIcon: const Icon(Icons.qr_code_rounded),
-                            ),
-                          ),
+                    // ✅ Código + Tipo RESPONSIVO (fix overflow)
+                    _twoColResponsive(
+                      context,
+                      left: TextFormField(
+                        controller: controller.codigoCtrl,
+                        enabled: !controller.saving,
+                        decoration: ProductoDialogUI.decor(
+                          label: 'Código',
+                          hint: 'Opcional',
+                          prefixIcon: const Icon(Icons.qr_code_rounded),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: controller.tipoItem,
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'PRODUCTO',
-                                child: Text('PRODUCTO'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'INSUMO',
-                                child: Text('INSUMO'),
-                              ),
-                            ],
-                            onChanged: controller.saving
-                                ? null
-                                : (v) => controller
-                                    .setTipoItem(v ?? controller.tipoItem),
-                            decoration: ProductoDialogUI.decor(
-                              label: 'Tipo',
-                              prefixIcon: const Icon(Icons.category_rounded),
-                            ),
+                      ),
+                      right: DropdownButtonFormField<String>(
+                        isExpanded: true, // ✅ evita overflow
+                        initialValue: controller.tipoItem,
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'PRODUCTO',
+                            child: Text('PRODUCTO'),
                           ),
+                          DropdownMenuItem(
+                            value: 'INSUMO',
+                            child: Text('INSUMO'),
+                          ),
+                        ],
+                        onChanged: controller.saving
+                            ? null
+                            : (v) =>
+                                controller.setTipoItem(v ?? controller.tipoItem),
+                        decoration: ProductoDialogUI.decor(
+                          label: 'Tipo',
+                          prefixIcon: const Icon(Icons.category_rounded),
                         ),
-                      ],
+                      ),
                     ),
+
                     ProductoDialogUI.gap(),
 
                     TextFormField(
@@ -242,52 +282,48 @@ class ProductoDialogForm extends StatelessWidget {
               ProductoDialogUI.card(
                 child: Column(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: controller.unidadId,
-                            items: unidades
-                                .map((u) => DropdownMenuItem(
-                                      value: u.id,
-                                      child: Text(u.label),
-                                    ))
-                                .toList(),
-                            onChanged:
-                                controller.saving ? null : controller.setUnidadId,
-                            decoration: ProductoDialogUI.decor(
-                              label: 'Unidad',
-                              prefixIcon: const Icon(Icons.straighten_rounded),
-                            ),
-                            validator: (v) => (v == null || v.isEmpty)
-                                ? 'Selecciona una unidad'
-                                : null,
-                          ),
+                    // ✅ Unidad + Stock RESPONSIVO (fix overflow)
+                    _twoColResponsive(
+                      context,
+                      left: DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        initialValue: controller.unidadId,
+                        items: unidades
+                            .map(
+                              (u) => DropdownMenuItem(
+                                value: u.id,
+                                child: _ellipsisItem(u.label),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: controller.saving ? null : controller.setUnidadId,
+                        decoration: ProductoDialogUI.decor(
+                          label: 'Unidad',
+                          prefixIcon: const Icon(Icons.straighten_rounded),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: controller.stockCtrl,
-                            enabled: !controller.saving,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly
-                            ],
-                            decoration: ProductoDialogUI.decor(
-                              label: 'Stock',
-                              prefixIcon: const Icon(Icons.numbers_rounded),
-                              helper: 'Solo enteros (ej: 0, 5, 12).',
-                            ),
-                            validator: (v) {
-                              final n = int.tryParse((v ?? '').trim());
-                              if (n == null) return 'Solo enteros';
-                              if (n < 0) return 'No puede ser negativo';
-                              return null;
-                            },
-                          ),
+                        validator: (v) => (v == null || v.isEmpty)
+                            ? 'Selecciona una unidad'
+                            : null,
+                      ),
+                      right: TextFormField(
+                        controller: controller.stockCtrl,
+                        enabled: !controller.saving,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: ProductoDialogUI.decor(
+                          label: 'Stock',
+                          prefixIcon: const Icon(Icons.numbers_rounded),
+                          helper: 'Solo enteros (ej: 0, 5, 12).',
                         ),
-                      ],
+                        validator: (v) {
+                          final n = int.tryParse((v ?? '').trim());
+                          if (n == null) return 'Solo enteros';
+                          if (n < 0) return 'No puede ser negativo';
+                          return null;
+                        },
+                      ),
                     ),
+
                     ProductoDialogUI.gap(),
 
                     TextFormField(
