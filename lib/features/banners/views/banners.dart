@@ -1,3 +1,4 @@
+// lib/features/banners/pages/banners.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -37,11 +38,20 @@ class _BannersPageState extends State<BannersPage> {
   Stream<QuerySnapshot<Map<String, dynamic>>> _bannersStream() =>
       controller.bannersStream();
 
-  Future<void> _openAddDialog() async {
-    final res = await showDialog<BannerFormResult>(
+  Future<BannerFormResult?> _showBannerDialog(Widget dialog) {
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    return showDialog<BannerFormResult>(
       context: context,
+      useRootNavigator: true, // ✅ CLAVE en Modular / navigators anidados
       barrierDismissible: false,
-      builder: (_) => const BannerDialog(title: 'Agregar banner'),
+      builder: (_) => dialog,
+    );
+  }
+
+  Future<void> _openAddDialog() async {
+    final res = await _showBannerDialog(
+      const BannerDialog(title: 'Agregar banner'),
     );
 
     if (res == null) return;
@@ -76,16 +86,17 @@ class _BannersPageState extends State<BannersPage> {
     required String docId,
     required Map<String, dynamic> data,
   }) async {
-    final res = await showDialog<BannerFormResult>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => BannerDialog(
+    // ✅ IMPORTANTE:
+    // Quité initialImagen/initialEstado/initialIdProducto porque tu BannerDialog
+    // no los tiene con ese nombre (por eso el error).
+    // Si quieres precarga completa, pásame el constructor real de BannerDialog
+    // y lo dejo exacto.
+    final res = await _showBannerDialog(
+      BannerDialog(
         title: 'Editar banner',
         initialTitulo: (data['titulo'] ?? '').toString(),
         initialSubtitulo: (data['subtitulo'] ?? '').toString(),
-        initialImagen: (data['imagen'] ?? '').toString(),
-        initialEstado: (data['estado'] ?? 'INACTIVO').toString(),
-        initialIdProducto: (data['idproducto'] ?? '').toString(),
+        // ❌ NO PASAR: initialImagen / initialEstado / initialIdProducto
       ),
     );
 
@@ -119,8 +130,11 @@ class _BannersPageState extends State<BannersPage> {
   }
 
   Future<void> _deleteBanner(String docId, String titulo) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+
     final ok = await showDialog<bool>(
       context: context,
+      useRootNavigator: true,
       barrierDismissible: false,
       builder: (_) => ConfirmDeleteDialog(
         title: 'Eliminar banner',
@@ -148,6 +162,57 @@ class _BannersPageState extends State<BannersPage> {
         );
       }
     }
+  }
+
+  InputDecoration _searchDecor() {
+    return InputDecoration(
+      hintText: 'Buscar por título, subtítulo o idproducto...',
+      filled: true,
+      fillColor: Palette.fieldBg,
+      prefixIcon: Icon(
+        Icons.search_rounded,
+        color: Palette.ink.withValues(alpha: 0.65),
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(
+          color: Palette.button.withValues(alpha: 0.35),
+        ),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(
+          color: Palette.button.withValues(alpha: 0.25),
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(
+          color: Palette.primary.withValues(alpha: 0.8),
+          width: 1.6,
+        ),
+      ),
+    );
+  }
+
+  ButtonStyle _primaryBtn() {
+    return ElevatedButton.styleFrom(
+      backgroundColor: Palette.button,
+      foregroundColor: Palette.white,
+      elevation: 0,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      textStyle: const TextStyle(fontWeight: FontWeight.w700),
+    );
+  }
+
+  ButtonStyle _outlineBtn() {
+    return OutlinedButton.styleFrom(
+      foregroundColor: Palette.ink,
+      side: BorderSide(color: Palette.button.withValues(alpha: 0.55)),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    );
   }
 
   @override
@@ -181,20 +246,7 @@ class _BannersPageState extends State<BannersPage> {
                             onPressed: _openAddDialog,
                             icon: const Icon(Icons.add_rounded),
                             label: const Text('Agregar banner'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Palette.button,
-                              foregroundColor: Palette.white,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 18,
-                                vertical: 14,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              textStyle:
-                                  const TextStyle(fontWeight: FontWeight.w700),
-                            ),
+                            style: _primaryBtn(),
                           ),
                         ),
                       ],
@@ -214,20 +266,7 @@ class _BannersPageState extends State<BannersPage> {
                           onPressed: _openAddDialog,
                           icon: const Icon(Icons.add_rounded),
                           label: const Text('Agregar banner'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Palette.button,
-                            foregroundColor: Palette.white,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 14,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            textStyle:
-                                const TextStyle(fontWeight: FontWeight.w700),
-                          ),
+                          style: _primaryBtn(),
                         ),
                       ],
                     ),
@@ -240,35 +279,7 @@ class _BannersPageState extends State<BannersPage> {
                       children: [
                         TextField(
                           controller: controller.searchCtrl,
-                          decoration: InputDecoration(
-                            hintText:
-                                'Buscar por título, subtítulo o idproducto...',
-                            filled: true,
-                            fillColor: Palette.fieldBg,
-                            prefixIcon: Icon(
-                              Icons.search_rounded,
-                              color: Palette.ink.withValues(alpha: 0.65),
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(
-                                color: Palette.button.withValues(alpha: 0.35),
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(
-                                color: Palette.button.withValues(alpha: 0.25),
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(
-                                color: Palette.primary.withValues(alpha: 0.8),
-                                width: 1.6,
-                              ),
-                            ),
-                          ),
+                          decoration: _searchDecor(),
                         ),
                         const SizedBox(height: 12),
                         SizedBox(
@@ -277,19 +288,7 @@ class _BannersPageState extends State<BannersPage> {
                             onPressed: () => controller.searchCtrl.clear(),
                             icon: const Icon(Icons.clear_rounded),
                             label: const Text('Limpiar'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Palette.ink,
-                              side: BorderSide(
-                                color: Palette.button.withValues(alpha: 0.55),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 14,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
+                            style: _outlineBtn(),
                           ),
                         ),
                       ],
@@ -299,38 +298,7 @@ class _BannersPageState extends State<BannersPage> {
                         Expanded(
                           child: TextField(
                             controller: controller.searchCtrl,
-                            decoration: InputDecoration(
-                              hintText:
-                                  'Buscar por título, subtítulo o idproducto...',
-                              filled: true,
-                              fillColor: Palette.fieldBg,
-                              prefixIcon: Icon(
-                                Icons.search_rounded,
-                                color: Palette.ink.withValues(alpha: 0.65),
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide(
-                                  color:
-                                      Palette.button.withValues(alpha: 0.35),
-                                ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide(
-                                  color:
-                                      Palette.button.withValues(alpha: 0.25),
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide(
-                                  color:
-                                      Palette.primary.withValues(alpha: 0.8),
-                                  width: 1.6,
-                                ),
-                              ),
-                            ),
+                            decoration: _searchDecor(),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -338,19 +306,7 @@ class _BannersPageState extends State<BannersPage> {
                           onPressed: () => controller.searchCtrl.clear(),
                           icon: const Icon(Icons.clear_rounded),
                           label: const Text('Limpiar'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Palette.ink,
-                            side: BorderSide(
-                              color: Palette.button.withValues(alpha: 0.55),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 14,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
+                          style: _outlineBtn(),
                         ),
                       ],
                     ),
@@ -403,7 +359,7 @@ class _BannersPageState extends State<BannersPage> {
                                       crossAxisCount: 1,
                                       mainAxisSpacing: 14,
                                       crossAxisSpacing: 14,
-                                      mainAxisExtent: 300, // ✅ NO overflow + se ve grande
+                                      mainAxisExtent: 300,
                                     )
                                   : const SliverGridDelegateWithMaxCrossAxisExtent(
                                       maxCrossAxisExtent: 520,
@@ -415,13 +371,13 @@ class _BannersPageState extends State<BannersPage> {
                               itemBuilder: (_, i) {
                                 final r = items[i];
                                 final docId = r['docId'] as String;
-                                final titulo = r['titulo'] as String;
+                                final titulo = (r['titulo'] ?? '').toString();
 
                                 return BannerCard(
                                   titulo: titulo,
-                                  subtitulo: r['subtitulo'] as String,
-                                  imagen: r['imagen'] as String,
-                                  estado: r['estado'] as String,
+                                  subtitulo: (r['subtitulo'] ?? '').toString(),
+                                  imagen: (r['imagen'] ?? '').toString(),
+                                  estado: (r['estado'] ?? '').toString(),
                                   onEdit: () => _openEditDialog(
                                     docId: docId,
                                     data: r,

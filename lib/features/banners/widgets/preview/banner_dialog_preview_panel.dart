@@ -16,10 +16,11 @@ class BannerDialogPreviewPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header
           Row(
             children: [
               Container(
-                width: 80,
+                width: 40,
                 height: 40,
                 decoration: BoxDecoration(
                   color: Palette.button.withValues(alpha: 0.14),
@@ -48,83 +49,88 @@ class BannerDialogPreviewPanel extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          ValueListenableBuilder<int>(
-            valueListenable: controller.previewTick,
-            builder: (_, __, ___) {
-              final t = controller.tituloCtrl.text.trim();
-              final s = controller.subtituloCtrl.text.trim();
+          // ✅ CLAVE: ocupar el alto disponible del panel y encajar el teléfono
+          Expanded(
+            child: ValueListenableBuilder<int>(
+              valueListenable: controller.previewTick,
+              builder: (_, __, ___) {
+                final t = controller.tituloCtrl.text.trim();
+                final s = controller.subtituloCtrl.text.trim();
 
-              final url = controller.previewUrl;
-              final bytes = controller.previewBytes;
+                final url = controller.previewUrl;
+                final bytes = controller.previewBytes;
 
-              return LayoutBuilder(
-                builder: (context, c) {
-                  // espacio lateral “bonito” pero que no rompa en angosto
-                  final sidePad = (c.maxWidth < 360) ? 12.0 : 44.0;
+                // Tamaño “base” del teléfono (el FittedBox lo reduce si no cabe)
+                const double phoneWidth = 292;
 
-                  final available = (c.maxWidth - (sidePad * 2)).clamp(220.0, 600.0);
-                  final phoneWidth = available.clamp(240.0, 280.0);
+                final phone = SizedBox(
+                  width: phoneWidth,
+                  child: BannerPhonePreviewFrame(
+                    title: 'Vista previa móvil',
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final cardW =
+                            (constraints.maxWidth * 0.92).clamp(210.0, 260.0);
 
-                  return Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: sidePad),
-                      child: SizedBox(
-                        width: phoneWidth,
-                        child: BannerPhonePreviewFrame(
-                          title: 'Vista previa móvil',
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final cardW = (constraints.maxWidth * 0.98)
-                                  .clamp(220.0, phoneWidth);
-
-                              return ColoredBox(
-                                color: Palette.white,
-                                child: ScrollConfiguration(
-                                  behavior: const _NoScrollbarScrollBehavior(),
-                                  child: SingleChildScrollView(
-                                    physics: const ClampingScrollPhysics(),
-                                    padding: const EdgeInsets.only(top: 10),
+                        return ColoredBox(
+                          color: Palette.white,
+                          child: ScrollConfiguration(
+                            behavior: const _NoScrollbarScrollBehavior(),
+                            child: SingleChildScrollView(
+                              physics: const ClampingScrollPhysics(),
+                              padding:
+                                  const EdgeInsets.only(top: 10, bottom: 16),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min, // ✅ CLAVE
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Align(
+                                    alignment: Alignment.topCenter,
                                     child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        minHeight: constraints.maxHeight,
-                                      ),
-                                      child: IntrinsicHeight(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                                          children: [
-                                            Align(
-                                              alignment: Alignment.topCenter,
-                                              child: ConstrainedBox(
-                                                constraints: BoxConstraints(maxWidth: cardW),
-                                                child: SizedBox(
-                                                  height: 130,
-                                                  child: BannerCardBodyPreview(
-                                                    titulo: t.isEmpty ? 'Banner' : t,
-                                                    subtitulo: s.isEmpty ? '-' : s,
-                                                    imageUrl: url,
-                                                    pickedBytes: bytes,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            const Expanded(child: SizedBox()),
-                                          ],
+                                      constraints:
+                                          BoxConstraints(maxWidth: cardW),
+                                      child: SizedBox(
+                                        height: 130,
+                                        child: BannerCardBodyPreview(
+                                          titulo: t.isEmpty ? 'Banner' : t,
+                                          subtitulo: s.isEmpty ? '-' : s,
+                                          imageUrl: url,
+                                          pickedBytes: bytes,
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              );
-                            },
+                                  const SizedBox(height: 10),
+                                ],
+                              ),
+                            ),
                           ),
+                        );
+                      },
+                    ),
+                  ),
+                );
+
+                // ✅ Encajar dentro del panel para que JAMÁS desborde (alto o ancho)
+                return LayoutBuilder(
+                  builder: (_, box) {
+                    return Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: box.maxWidth,
+                          maxHeight: box.maxHeight,
+                        ),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown, // ✅ anti-overflow definitivo
+                          alignment: Alignment.topCenter,
+                          child: phone,
                         ),
                       ),
-                    ),
-                  );
-                },
-              );
-            },
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -165,16 +171,14 @@ class _NoScrollbarScrollBehavior extends ScrollBehavior {
     BuildContext context,
     Widget child,
     ScrollableDetails details,
-  ) {
-    return child;
-  }
+  ) =>
+      child;
 
   @override
   Widget buildOverscrollIndicator(
     BuildContext context,
     Widget child,
     ScrollableDetails details,
-  ) {
-    return child;
-  }
+  ) =>
+      child;
 }

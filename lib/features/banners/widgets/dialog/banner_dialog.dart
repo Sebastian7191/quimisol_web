@@ -1,33 +1,65 @@
+// lib/features/admin/banners/widgets/dialog/banner_dialog.dart
 import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
-import 'package:image_picker_web/image_picker_web.dart';
 
 import 'package:quimisol_web/core/theme/palette.dart';
-import 'package:quimisol_web/features/banners/controllers/banners_dialog_controller.dart';
-import 'package:quimisol_web/features/banners/widgets/dialog/form_result.dart';
 
-import 'package:quimisol_web/features/banners/widgets/dialog/product_list_selector.dart';
-import 'package:quimisol_web/features/banners/widgets/preview/banner_dialog_preview_panel.dart';
+/// Resultado (UI-only). No toca data.
+/// Ajusta/expande a lo que tú ya retornas si necesitas más campos.
+class BannerDialogResult {
+  final String titulo;
+  final String subtitulo;
+  final bool activo;
+  final Uint8List? pickedImageBytes;
+
+  const BannerDialogResult({
+    required this.titulo,
+    required this.subtitulo,
+    required this.activo,
+    required this.pickedImageBytes,
+  });
+}
 
 class BannerDialog extends StatefulWidget {
-  final String title;
-
+  final String title; // "Crear banner" / "Editar banner"
   final String? initialTitulo;
   final String? initialSubtitulo;
-  final String? initialImagen;
-  final String? initialEstado;
-  final String? initialIdProducto;
+  final bool initialActivo;
+
+  /// Opcional: si ya tienes una imagen actual (URL) para preview
+  final String? initialImageUrl;
 
   const BannerDialog({
     super.key,
     required this.title,
     this.initialTitulo,
     this.initialSubtitulo,
-    this.initialImagen,
-    this.initialEstado,
-    this.initialIdProducto,
+    this.initialActivo = true,
+    this.initialImageUrl,
   });
+
+  /// ✅ Abre el dialog usando root navigator (importante en Flutter Modular / nested navigators)
+  static Future<BannerDialogResult?> open(
+    BuildContext context, {
+    required String title,
+    String? initialTitulo,
+    String? initialSubtitulo,
+    bool initialActivo = true,
+    String? initialImageUrl,
+  }) {
+    return showDialog<BannerDialogResult>(
+      context: context,
+      useRootNavigator: true, // ✅ clave para que no “se pierda” el dialog
+      barrierDismissible: false,
+      builder: (_) => BannerDialog(
+        title: title,
+        initialTitulo: initialTitulo,
+        initialSubtitulo: initialSubtitulo,
+        initialActivo: initialActivo,
+        initialImageUrl: initialImageUrl,
+      ),
+    );
+  }
 
   @override
   State<BannerDialog> createState() => _BannerDialogState();
@@ -35,70 +67,467 @@ class BannerDialog extends StatefulWidget {
 
 class _BannerDialogState extends State<BannerDialog> {
   final _formKey = GlobalKey<FormState>();
-  late final BannersDialogController controller;
+  final _scrollCtrl = ScrollController();
 
-  bool _saving = false;
+  late final TextEditingController _tituloCtrl;
+  late final TextEditingController _subtituloCtrl;
+
+  bool _activo = true;
+
+  // UI-only: aquí puedes conectar tu picker real en tu proyecto si ya lo tienes.
+  Uint8List? _pickedBytes;
 
   @override
   void initState() {
     super.initState();
-
-    controller = BannersDialogController(
-      initialTitulo: widget.initialTitulo ?? '',
-      initialSubtitulo: widget.initialSubtitulo ?? '',
-      initialImagen: widget.initialImagen ?? '',
-      initialEstado: (widget.initialEstado ?? 'ACTIVO').toUpperCase(),
-      initialIdProducto: widget.initialIdProducto ?? '',
-    );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await controller.loadProducts();
-      if (mounted) setState(() {});
-    });
+    _tituloCtrl = TextEditingController(text: widget.initialTitulo ?? '');
+    _subtituloCtrl = TextEditingController(text: widget.initialSubtitulo ?? '');
+    _activo = widget.initialActivo;
   }
 
   @override
   void dispose() {
-    controller.dispose();
+    _scrollCtrl.dispose();
+    _tituloCtrl.dispose();
+    _subtituloCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _pickAndUploadImage() async {
-    final Uint8List? bytes = await ImagePickerWeb.getImageAsBytes();
-    if (bytes == null) return;
-
-    final ext = 'jpg';
-
-    try {
-      await controller.uploadBannerBytes(bytes: bytes, fileExt: ext);
-      if (mounted) setState(() {});
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al subir imagen: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
+  void _close() => Navigator.pop(context);
 
   void _submit() {
-    if (_saving) return;
     if (!_formKey.currentState!.validate()) return;
-
-    if (!controller.validateBasic()) return;
-
-    setState(() => _saving = true);
 
     Navigator.pop(
       context,
-      BannerFormResult(
-        titulo: controller.tituloCtrl.text,
-        subtitulo: controller.subtituloCtrl.text,
-        imagen: controller.finalImagenUrl,
-        estado: controller.estado,
-        idproducto: controller.idProductoCtrl.text,
+      BannerDialogResult(
+        titulo: _tituloCtrl.text.trim(),
+        subtitulo: _subtituloCtrl.text.trim(),
+        activo: _activo,
+        pickedImageBytes: _pickedBytes,
+      ),
+    );
+  }
+
+  // ---------- UI helpers ----------
+  static const BorderRadius _r18 = BorderRadius.all(Radius.circular(18));
+
+  InputDecoration _decor({
+    required String label,
+    String? hint,
+    Widget? prefixIcon,
+    String? helper,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      helperText: helper,
+      prefixIcon: prefixIcon,
+      filled: true,
+      fillColor: Palette.fieldBg,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: Palette.button.withValues(alpha: 0.20)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: Palette.button.withValues(alpha: 0.18)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: Palette.button.withValues(alpha: 0.55)),
+      ),
+    );
+  }
+
+  Widget _sectionTitle({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Palette.button.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Palette.button.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Palette.button.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Palette.button.withValues(alpha: 0.22)),
+            ),
+            child: Icon(icon, color: Palette.primary, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: Palette.ink,
+                    fontSize: 14.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: Palette.ink.withValues(alpha: 0.65),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Palette.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Palette.button.withValues(alpha: 0.14)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 12),
+          )
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _topBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Palette.button.withValues(alpha: 0.18),
+            Palette.button.withValues(alpha: 0.08),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Palette.button.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: Palette.button.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Palette.button.withValues(alpha: 0.22)),
+            ),
+            child: const Icon(Icons.campaign_rounded, color: Palette.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: Palette.ink,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Configura título, subtítulo, estado e imagen.',
+                  style: TextStyle(
+                    color: Palette.ink.withValues(alpha: 0.65),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: _close,
+            icon: Icon(Icons.close_rounded, color: Palette.ink.withValues(alpha: 0.65)),
+            splashRadius: 22,
+            tooltip: 'Cerrar',
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Preview simple (no toca data)
+  Widget _previewBox() {
+    Widget image;
+    if (_pickedBytes != null) {
+      image = Image.memory(_pickedBytes!, fit: BoxFit.cover);
+    } else if ((widget.initialImageUrl ?? '').trim().isNotEmpty) {
+      image = Image.network(
+        widget.initialImageUrl!.trim(),
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported_outlined),
+      );
+    } else {
+      image = Icon(Icons.image_outlined, color: Palette.ink.withValues(alpha: 0.25), size: 36);
+    }
+
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Palette.button.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Palette.button.withValues(alpha: 0.25)),
+                ),
+                child: const Icon(Icons.phone_iphone_rounded, color: Palette.primary),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Vista previa',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: Palette.ink,
+                    fontSize: 14.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Marco tipo “móvil”
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF111111),
+              borderRadius: BorderRadius.circular(34),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.20),
+                  blurRadius: 24,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: AspectRatio(
+                aspectRatio: 9 / 19.5,
+                child: Container(
+                  color: Palette.fieldBg,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 20, 14, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Banner preview
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Palette.button.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: Palette.button.withValues(alpha: 0.18)),
+                          ),
+                          child: Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: SizedBox(
+                                  width: 64,
+                                  height: 64,
+                                  child: ColoredBox(
+                                    color: Palette.white,
+                                    child: Center(child: image),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      (_tituloCtrl.text.trim().isEmpty)
+                                          ? 'Título del banner'
+                                          : _tituloCtrl.text.trim(),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        color: Palette.ink,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      (_subtituloCtrl.text.trim().isEmpty)
+                                          ? 'Subtítulo del banner'
+                                          : _subtituloCtrl.text.trim(),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: Palette.ink.withValues(alpha: 0.65),
+                                        fontSize: 12.2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          _activo ? 'ACTIVO' : 'INACTIVO',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: _activo
+                                ? Palette.statsSuccess
+                                : Palette.ink.withValues(alpha: 0.45),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Form
+  Widget _form() {
+    return Form(
+      key: _formKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min, // ✅ importante dentro de scroll
+        children: [
+          _sectionTitle(
+            icon: Icons.edit_rounded,
+            title: 'Datos del banner',
+            subtitle: 'Título, subtítulo y estado.',
+          ),
+          const SizedBox(height: 12),
+
+          _card(
+            child: Column(
+              children: [
+                TextFormField(
+                  controller: _tituloCtrl,
+                  decoration: _decor(
+                    label: 'Título',
+                    prefixIcon: const Icon(Icons.title_rounded),
+                  ),
+                  validator: (v) {
+                    if ((v ?? '').trim().isEmpty) return 'Ingresa un título';
+                    return null;
+                  },
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _subtituloCtrl,
+                  decoration: _decor(
+                    label: 'Subtítulo',
+                    prefixIcon: const Icon(Icons.subtitles_rounded),
+                  ),
+                  validator: (v) {
+                    if ((v ?? '').trim().isEmpty) return 'Ingresa un subtítulo';
+                    return null;
+                  },
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 12),
+
+                // Estado
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Palette.fieldBg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Palette.button.withValues(alpha: 0.18)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.toggle_on_rounded, color: Palette.primary),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Activo',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: Palette.ink,
+                          ),
+                        ),
+                      ),
+                      Switch(
+                        value: _activo,
+                        onChanged: (v) => setState(() => _activo = v),
+                        activeColor: Palette.primary,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Imagen (UI-only)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    // Aquí conecta tu picker real si ya lo tienes.
+                    // Por ahora no hace nada (UI-only) para no tocar data.
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Conecta aquí tu selector de imagen (UI-only).'),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.image_rounded),
+                  label: const Text('Seleccionar imagen'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Palette.ink,
+                    side: BorderSide(color: Palette.button.withValues(alpha: 0.45)),
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -106,428 +535,124 @@ class _BannerDialogState extends State<BannerDialog> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-
-    final maxW = media.size.width < 1280 ? media.size.width - 24 : 1240.0;
     final maxH = (media.size.height * 0.92).clamp(520.0, 920.0);
 
     return Dialog(
-      backgroundColor: Palette.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxW, maxHeight: maxH),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: Palette.ink,
-                ),
-              ),
-              const SizedBox(height: 14),
+        constraints: BoxConstraints(maxWidth: 1100, maxHeight: maxH),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Palette.white,
+            borderRadius: _r18,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              children: [
+                _topBar(),
+                const SizedBox(height: 14),
 
-              // ✅ zona scrolleable para que nunca haga overflow vertical
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, c) {
-                    final isWide = c.maxWidth >= 920;
+                // ✅ ZONA SCROLL (segura)
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, box) {
+                      final isWide = box.maxWidth >= 980;
 
-                    final form = _FormCard(
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
+                      if (isWide) {
+                        // Desktop: form scroll a la izquierda, preview fijo a la derecha
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            TextFormField(
-                              controller: controller.tituloCtrl,
-                              decoration: InputDecoration(
-                                labelText: 'Título (Ej: descuentos)',
-                                filled: true,
-                                fillColor: Palette.fieldBg,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
+                            Expanded(
+                              child: Scrollbar(
+                                controller: _scrollCtrl,
+                                thumbVisibility: true,
+                                child: SingleChildScrollView(
+                                  controller: _scrollCtrl,
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: _form(),
                                 ),
                               ),
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) {
-                                  return 'Ingresa un título';
-                                }
-                                if (v.trim().length < 2) return 'Mínimo 2 caracteres';
-                                return null;
-                              },
                             ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: controller.subtituloCtrl,
-                              decoration: InputDecoration(
-                                labelText: 'Subtítulo (Ej: 20%)',
-                                filled: true,
-                                fillColor: Palette.fieldBg,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) {
-                                  return 'Ingresa un subtítulo';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 12),
-
-                            ProductListSelector(
-                              products: controller.products,
-                              selected: controller.selectedProduct,
-                              enabled: !controller.loadingProducts,
-                              onSelected: (p) => setState(() => controller.selectProduct(p)),
-                              height: 300,
-                            ),
-
-                            const SizedBox(height: 12),
-
-                            // ✅ Imagen (Row->Column en angosto)
-                            LayoutBuilder(
-                              builder: (context, ic) {
-                                final compact = ic.maxWidth < 640;
-
-                                final left = Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Imagen del banner',
-                                        style: TextStyle(
-                                          color: Palette.ink.withValues(alpha: 0.85),
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        controller.finalImagenUrl.trim().isEmpty
-                                            ? 'Se usará la imagen del producto (si eliges uno) o puedes subir una.'
-                                            : 'Imagen lista ✅ (producto o subida)',
-                                        style: TextStyle(
-                                          color: Palette.ink.withValues(alpha: 0.65),
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 10),
-                                      Wrap(
-                                        spacing: 10,
-                                        runSpacing: 10,
-                                        children: [
-                                          OutlinedButton.icon(
-                                            onPressed: controller.uploadingImage ? null : _pickAndUploadImage,
-                                            icon: const Icon(Icons.upload_rounded),
-                                            label: Text(
-                                              controller.uploadingImage ? 'Subiendo...' : 'Subir imagen',
-                                            ),
-                                            style: OutlinedButton.styleFrom(
-                                              foregroundColor: Palette.ink,
-                                              side: BorderSide(
-                                                color: Palette.button.withValues(alpha: 0.55),
-                                              ),
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 14,
-                                                vertical: 12,
-                                              ),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(14),
-                                              ),
-                                            ),
-                                          ),
-                                          OutlinedButton.icon(
-                                            onPressed: controller.uploadingImage
-                                                ? null
-                                                : () => setState(controller.clearCustomImage),
-                                            icon: const Icon(Icons.restore_rounded),
-                                            label: const Text('Usar imagen del producto'),
-                                            style: OutlinedButton.styleFrom(
-                                              foregroundColor: Palette.ink,
-                                              side: BorderSide(
-                                                color: Palette.button.withValues(alpha: 0.35),
-                                              ),
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 14,
-                                                vertical: 12,
-                                              ),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(14),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                );
-
-                                final preview = _DialogImagePreview(
-                                  url: controller.previewUrl,
-                                  bytes: controller.previewBytes,
-                                );
-
-                                return Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Palette.fieldBg,
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: Palette.button.withValues(alpha: 0.25),
-                                    ),
-                                  ),
-                                  child: compact
-                                      ? Column(
-                                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                                          children: [
-                                            left,
-                                            const SizedBox(height: 12),
-                                            Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: SizedBox(
-                                                width: double.infinity,
-                                                child: preview,
-                                              ),
-                                            ),
-                                          ],
-                                        )
-                                      : Row(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            left,
-                                            const SizedBox(width: 12),
-                                            preview,
-                                          ],
-                                        ),
-                                );
-                              },
-                            ),
-
-                            const SizedBox(height: 12),
-
-                            DropdownButtonFormField<String>(
-                              value: controller.estado,
-                              items: const [
-                                DropdownMenuItem(value: 'ACTIVO', child: Text('ACTIVO')),
-                                DropdownMenuItem(value: 'INACTIVO', child: Text('INACTIVO')),
-                              ],
-                              onChanged: (v) => setState(() => controller.setEstado(v ?? 'ACTIVO')),
-                              decoration: InputDecoration(
-                                labelText: 'Estado',
-                                filled: true,
-                                fillColor: Palette.fieldBg,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
+                            const SizedBox(width: 14),
+                            SizedBox(
+                              width: 360,
+                              child: _previewBox(),
                             ),
                           ],
-                        ),
-                      ),
-                    );
+                        );
+                      }
 
-                    final previewPanel = BannerDialogPreviewPanel(controller: controller);
-
-                    final content = isWide
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      // Móvil: 1 solo scroll que incluye form + preview (abajo)
+                      return Scrollbar(
+                        controller: _scrollCtrl,
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          controller: _scrollCtrl,
+                          padding: const EdgeInsets.only(right: 6),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Expanded(flex: 6, child: form),
-                              const SizedBox(width: 14),
-                              Expanded(flex: 5, child: previewPanel),
-                            ],
-                          )
-                        : Column(
-                            children: [
-                              form,
+                              _form(),
                               const SizedBox(height: 14),
-                              previewPanel,
+                              _previewBox(),
+                              const SizedBox(height: 10),
                             ],
-                          );
-
-                    return ScrollConfiguration(
-                      behavior: const _NoScrollGlow(),
-                      child: SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: content,
-                      ),
-                    );
-                  },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
-              LayoutBuilder(
-                builder: (context, c) {
-                  final tiny = c.maxWidth < 420;
-
-                  final cancel = Expanded(
-                    child: OutlinedButton(
-                      onPressed: _saving ? null : () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Palette.ink,
-                        side: BorderSide(color: Palette.button.withValues(alpha: 0.55)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                // ✅ BOTONES FIJOS (fuera del scroll)
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _close,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Palette.ink,
+                          side: BorderSide(
+                            color: Palette.button.withValues(alpha: 0.55),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          textStyle: const TextStyle(fontWeight: FontWeight.w900),
                         ),
-                      ),
-                      child: const Text(
-                        'Cancelar',
-                        style: TextStyle(fontWeight: FontWeight.w800),
+                        child: const Text('Cancelar'),
                       ),
                     ),
-                  );
-
-                  final save = Expanded(
-                    child: ElevatedButton(
-                      onPressed: _saving ? null : _submit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Palette.button,
-                        foregroundColor: Palette.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _submit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Palette.button,
+                          foregroundColor: Palette.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          textStyle: const TextStyle(fontWeight: FontWeight.w900),
                         ),
+                        child: const Text('Guardar'),
                       ),
-                      child: _saving
-                          ? const SizedBox(
-                              height: 18,
-                              width: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text(
-                              'Guardar',
-                              style: TextStyle(fontWeight: FontWeight.w900),
-                            ),
                     ),
-                  );
-
-                  if (!tiny) {
-                    return Row(
-                      children: [
-                        cancel,
-                        const SizedBox(width: 12),
-                        save,
-                      ],
-                    );
-                  }
-
-                  // en ultra angosto, se apilan (misma UI, sin romper)
-                  return Column(
-                    children: [
-                      Row(children: [cancel]),
-                      const SizedBox(height: 12),
-                      Row(children: [save]),
-                    ],
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FormCard extends StatelessWidget {
-  final Widget child;
-  const _FormCard({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Palette.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Palette.button.withValues(alpha: 0.35)),
-      ),
-      child: child,
-    );
-  }
-}
-
-class _DialogImagePreview extends StatelessWidget {
-  const _DialogImagePreview({
-    required this.url,
-    required this.bytes,
-  });
-
-  final String url;
-  final Uint8List? bytes;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasBytes = bytes != null;
-    final hasUrl = url.trim().isNotEmpty;
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        // si no hay espacio, la preview baja su ancho sin cambiar la “pinta”
-        final w = (c.maxWidth.isFinite ? c.maxWidth : 220.0).clamp(160.0, 220.0);
-
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            width: w,
-            height: 140,
-            decoration: BoxDecoration(
-              color: Palette.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Palette.button.withValues(alpha: 0.22)),
+                  ],
+                ),
+              ],
             ),
-            child: hasBytes
-                ? Image.memory(bytes!, fit: BoxFit.cover)
-                : (hasUrl
-                    ? Image.network(
-                        url,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const _NoImgBox(),
-                      )
-                    : const _NoImgBox()),
           ),
-        );
-      },
-    );
-  }
-}
-
-class _NoImgBox extends StatelessWidget {
-  const _NoImgBox();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Palette.fieldBg,
-      child: Center(
-        child: Icon(
-          Icons.image_outlined,
-          size: 34,
-          color: Palette.ink.withValues(alpha: 0.25),
         ),
       ),
     );
-  }
-}
-
-class _NoScrollGlow extends ScrollBehavior {
-  const _NoScrollGlow();
-
-  @override
-  Widget buildOverscrollIndicator(
-    BuildContext context,
-    Widget child,
-    ScrollableDetails details,
-  ) {
-    return child;
   }
 }
