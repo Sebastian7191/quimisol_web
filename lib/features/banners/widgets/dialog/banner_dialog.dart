@@ -493,7 +493,7 @@ class _BannerDialogState extends State<BannerDialog> {
                       Switch(
                         value: _activo,
                         onChanged: (v) => setState(() => _activo = v),
-                        activeColor: Palette.primary,
+                        activeThumbColor: Palette.primary,
                       ),
                     ],
                   ),

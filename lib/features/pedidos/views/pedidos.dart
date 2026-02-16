@@ -222,20 +222,19 @@ class _PedidosHeader extends StatelessWidget {
         final t = bgCtrl.value;
 
         final left = Color.lerp(
-          Palette.primary,
-          Palette.gradientEnd,
-          0.20 + 0.25 * t,
-        )!;
+        Palette.primary.withValues(alpha: 0.95),
+        Palette.secondary.withValues(alpha: 0.90),
+        0.10 + 0.25 * t)!;
+
         final mid = Color.lerp(
-          Palette.gradientEnd,
-          Palette.secondary,
-          0.18 + 0.25 * t,
-        )!;
+        Palette.primary.withValues(alpha: 0.95),
+        Palette.secondary.withValues(alpha: 0.90),
+        0.45 + 0.20 * t)!;
+
         final right = Color.lerp(
-          Palette.button,
-          Palette.secondary,
-          0.22 + 0.25 * (1 - t),
-        )!;
+        Palette.primary.withValues(alpha: 0.95),
+        Palette.secondary.withValues(alpha: 0.90),
+        0.80 - 0.20 * t)!;
 
         return Container(
           width: double.infinity,

@@ -1,23 +1,3 @@
-// ✅ Usuarios (Firestore) — más bonito + más animado (sin parpadeos feos)
-// ✅ Sin selección múltiple
-// ✅ Rol editable por usuario con ComboBox a la derecha
-// ✅ Buscador + filtro por rol
-// ✅ Avatares: muestra SI O SI la foto si existe (soporta gs://, rutas storage y https)
-// ✅ Animaciones suaves: header con gradiente animado, entrada de cards con slide/fade,
-//    counters con AnimatedSwitcher, micro feedback al cambiar rol.
-//
-// ✅ PEDIDO (CORREGIDO):
-// - El header va PEGADO arriba y a la izquierda (sin espacio afuera)
-// - El “aire” interno del header vuelve (padding y separaciones internas)
-// - Degradé: MORADO izquierda -> ROSADO derecha (horizontal)
-// - Bordes SOLO abajo
-//
-// ✅ NUEVO:
-// - Si rol == repartidor: al lado del combo de rol aparece combo de "Almacén"
-// - Almacenes desde /almacenes (activo==true) mostrando solo "nombre"
-// - Guarda SOLO el uid del almacén como "almacenId" en /repartidores/{uid}
-//   (y también en /usuarios/{uid} para reflejarlo en la UI)
-
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -200,7 +180,6 @@ class _UsuariosPageState extends State<UsuariosPage>
 }
 
 /* ---------------- HEADER ANIMADO ---------------- */
-
 class _AnimatedHeader extends StatelessWidget {
   const _AnimatedHeader({
     required this.bgCtrl,
@@ -223,22 +202,20 @@ class _AnimatedHeader extends StatelessWidget {
       builder: (_, __) {
         final t = bgCtrl.value;
 
-        // ✅ Degradé horizontal: MORADO izquierda -> ROSADO derecha
         final leftPurple = Color.lerp(
-          Palette.primary,
-          Palette.gradientEnd,
-          0.20 + 0.25 * t,
-        )!;
+          Palette.primary.withValues(alpha: 0.95),
+          Palette.secondary.withValues(alpha: 0.90),
+          0.10 + 0.25 * t)!;
+
         final mid = Color.lerp(
-          Palette.gradientEnd,
-          Palette.secondary,
-          0.20 + 0.25 * t,
-        )!;
+          Palette.primary.withValues(alpha: 0.95),
+          Palette.secondary.withValues(alpha: 0.90),
+          0.45 + 0.20 * t)!;
+
         final rightPink = Color.lerp(
-          Palette.button,
-          Palette.secondary,
-          0.25 + 0.25 * (1 - t),
-        )!;
+          Palette.primary.withValues(alpha: 0.95),
+          Palette.secondary.withValues(alpha: 0.90),
+          0.80 - 0.20 * t)!;
 
         return Container(
           width: double.infinity,
