@@ -87,64 +87,136 @@ class _AlmacenesPageState extends State<AlmacenesPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          /// ================= HEADER =================
-          Row(
-            children: [
-              const Text(
-                'Gestión de Almacenes',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: Palette.ink,
-                ),
-              ),
-              const Spacer(),
-              ElevatedButton.icon(
-                onPressed: _openAddAlmacenDialog,
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Agregar almacén'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Palette.button,
-                  foregroundColor: Palette.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  textStyle: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
-          ),
+          /// ================= HEADER (con filtro adentro) =================
+          LayoutBuilder(
+            builder: (context, c) {
+              final compact = c.maxWidth < 720;
 
-          const SizedBox(height: 16),
-
-          /// ================= FILTRO DEPARTAMENTOS =================
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: controller.departamentos.map((d) {
-              final selected = d == controller.selectedDepto;
-              return ChoiceChip(
-                label: Text(d),
-                selected: selected,
-                selectedColor: Palette.button,
-                backgroundColor: Palette.card,
-                labelStyle: TextStyle(
-                  color: selected ? Palette.white : Palette.ink,
-                  fontWeight: FontWeight.w600,
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Palette.primary.withValues(alpha: 0.95),
+                      Palette.secondary.withValues(alpha: 0.90),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
-                onSelected: (_) => setState(() => controller.selectedDepto = d),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: Palette.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Palette.white.withValues(alpha: 0.35),
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.warehouse_rounded,
+                            color: Palette.white,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Gestión de Almacenes',
+                                style: TextStyle(
+                                  fontSize: compact ? 18 : 22,
+                                  fontWeight: FontWeight.w900,
+                                  color: Palette.white,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Administra almacenes por departamento',
+                                style: TextStyle(
+                                  fontSize: compact ? 12 : 13,
+                                  color: Palette.white.withValues(alpha: 0.92),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton.icon(
+                          onPressed: _openAddAlmacenDialog,
+                          icon: const Icon(Icons.add_rounded),
+                          label: Text(compact ? 'Agregar' : 'Agregar almacén'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Palette.white.withValues(alpha: 0.18),
+                            foregroundColor: Palette.white,
+                            elevation: 0,
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              side: BorderSide(
+                                color: Palette.white,
+                                width: 2,
+                              ),
+                            ),
+                            textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
+          // ================= FILTRO DEPARTAMENTOS (dentro del header) =================
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: controller.departamentos.map((d) {
+                        final selected = d == controller.selectedDepto;
+
+                        return ChoiceChip(
+                          label: Text(d),
+                          selected: selected,
+                          selectedColor: Palette.white.withValues(alpha: 0.22),
+                          backgroundColor: Palette.white.withValues(alpha: 0.14),
+                          side: BorderSide(
+                            color: Palette.ink.withValues(alpha: selected ? 0.55 : 0.26),
+                          ),
+                          labelStyle: TextStyle(
+                            color: Palette.ink.withValues(alpha: selected ? 1 : 0.92),
+                            fontWeight: FontWeight.w800,
+                          ),
+                          onSelected: (_) =>
+                              setState(() => controller.selectedDepto = d),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
               );
-            }).toList(),
+            },
           ),
 
           const SizedBox(height: 20),
 
-          /// ================= LISTADO DESDE FIRESTORE =================
+          // ================= LISTADO DESDE FIRESTORE =================
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: _almacenesStream(),

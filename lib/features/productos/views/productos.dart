@@ -1,12 +1,3 @@
-// lib/features/admin/productos/productos_page.dart
-//
-// ✅ Responsive UI:
-// - Desktop: DataTable (igual)
-// - Mobile: Cards/List (sin tocar data)
-//
-// ⚠️ NO se tocó:
-// - streams, controller, mapProducto, filterProductos, CRUD
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:quimisol_web/features/productos/data/producto_dialog_result.dart';
@@ -313,7 +304,7 @@ class _ProductosPageState extends State<ProductosPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // ================= HEADER =================
-                      if (!isMobile)
+                      /*if (!isMobile)
                         Row(
                           children: [
                             const Text(
@@ -352,218 +343,205 @@ class _ProductosPageState extends State<ProductosPage> {
                             ),
                           ],
                         )
-                      else
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const Text(
-                              'Gestión de Productos',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                                color: Palette.ink,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            SizedBox(
-                              height: 48,
-                              child: ElevatedButton.icon(
-                                onPressed: (unidades.isEmpty || almacenes.isEmpty)
-                                    ? null
-                                    : () => _openAddDialog(
-                                          unidades: unidades,
-                                          almacenes: almacenes,
-                                        ),
-                                icon: const Icon(Icons.add_rounded),
-                                label: const Text('Agregar producto'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Palette.button,
-                                  foregroundColor: Palette.white,
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  textStyle: const TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                      if (unidades.isEmpty || almacenes.isEmpty) ...[
-                        const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Palette.card,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: Palette.button.withValues(alpha: 0.35),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.info_outline_rounded,
-                                color: Palette.ink.withValues(alpha: 0.8),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  unidades.isEmpty
-                                      ? 'Primero crea al menos una unidad (Ej: Kilogramo, Litro, Unidad).'
-                                      : 'Primero crea al menos un almacén en la colección "almacenes".',
-                                  style: TextStyle(
-                                    color: Palette.ink.withValues(alpha: 0.85),
-                                  ),
-                                ),
-                              ),
+                      else*/                   
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: [
+                              Palette.primary.withValues(alpha: 0.95),
+                              Palette.secondary.withValues(alpha: 0.90),
                             ],
                           ),
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 18,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
                         ),
-                      ],
-
-                      const SizedBox(height: 14),
-
-                      // ================= BUSCADOR =================
-                      if (!isMobile)
-                        Row(
+                        child: Column(
                           children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _searchCtrl,
-                                decoration: InputDecoration(
-                                  hintText: 'Buscar por código o nombre...',
-                                  filled: true,
-                                  fillColor: Palette.fieldBg,
-                                  prefixIcon: Icon(
+                            Row(
+                              children: [
+                                Container(
+                                  width: 54,
+                                  height: 54,
+                                  decoration: BoxDecoration(
+                                    color: Palette.white.withValues(alpha: 0.18),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Palette.white.withValues(alpha: 0.35)),
+                                  ),
+                                  child: const Icon(
+                                    Icons.inventory_2_rounded,
+                                    color: Palette.white,
+                                    size: 28,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Gestión de Productos',
+                                        style: TextStyle(
+                                          fontSize: isMobile ? 18 : 22,
+                                          fontWeight: FontWeight.w900,
+                                          color: Palette.white,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Administra productos e insumos rápidamente',
+                                        style: TextStyle(
+                                          fontSize: isMobile ? 12 : 13,
+                                          color: Palette.white.withValues(alpha: 0.92),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+
+                                // Botón (responsive)
+                                SizedBox(
+                                  width: isMobile ? 150 : null,
+                                  child: ElevatedButton.icon(
+                                    onPressed: (unidades.isEmpty || almacenes.isEmpty)
+                                        ? null
+                                        : () => _openAddDialog(
+                                              unidades: unidades,
+                                              almacenes: almacenes,
+                                            ),
+                                    icon: const Icon(Icons.add_rounded),
+                                    label: Text(isMobile ? 'Agregar' : 'Agregar producto'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Palette.white.withValues(alpha: 0.18),
+                                      foregroundColor: Palette.white,
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                        side: BorderSide(
+                                          color: Palette.white, width: 2,
+                                        ),
+                                      ),
+                                      textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            // ===== buscador dentro del header =====
+                            Container(
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: Palette.white,
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(color: Palette.ink.withValues(alpha: 0.06)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.08),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 12),
+                                  ),
+                                ],
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: Row(
+                                children: [
+                                  Icon(
                                     Icons.search_rounded,
-                                    color: Palette.ink.withValues(alpha: 0.65),
+                                    color: Palette.ink.withValues(alpha: 0.45),
                                   ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                      color: Palette.button.withValues(alpha: 0.35),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _searchCtrl,
+                                      decoration: InputDecoration(
+                                        hintText: 'Buscar por código o nombre…',
+                                        border: InputBorder.none,
+                                        hintStyle: TextStyle(
+                                          color: Palette.ink.withValues(alpha: 0.35),
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      style: const TextStyle(
+                                        color: Palette.ink,
+                                        fontWeight: FontWeight.w900,
+                                      ),
                                     ),
                                   ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                      color: Palette.button.withValues(alpha: 0.25),
-                                    ),
+                                  ValueListenableBuilder<TextEditingValue>(
+                                    valueListenable: _searchCtrl,
+                                    builder: (_, v, __) {
+                                      final has = v.text.trim().isNotEmpty;
+                                      return AnimatedSwitcher(
+                                        duration: const Duration(milliseconds: 160),
+                                        transitionBuilder: (c, a) =>
+                                            FadeTransition(opacity: a, child: c),
+                                        child: !has
+                                            ? const SizedBox(width: 10, key: ValueKey('empty'))
+                                            : InkWell(
+                                                key: const ValueKey('clear'),
+                                                onTap: () => _searchCtrl.clear(),
+                                                borderRadius: BorderRadius.circular(12),
+                                                child: Padding(
+                                                  padding: const EdgeInsets.all(6),
+                                                  child: Icon(
+                                                    Icons.close_rounded,
+                                                    color: Palette.ink.withValues(alpha: 0.55),
+                                                  ),
+                                                ),
+                                              ),
+                                      );
+                                    },
                                   ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                      color: Palette.primary.withValues(alpha: 0.8),
-                                      width: 1.6,
-                                    ),
-                                  ),
-                                ),
+                                ],
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            OutlinedButton.icon(
-                              onPressed: () => _searchCtrl.clear(),
-                              icon: const Icon(Icons.clear_rounded),
-                              label: const Text('Limpiar'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Palette.ink,
-                                side: BorderSide(
-                                  color: Palette.button.withValues(alpha: 0.55),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 14,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                            ),
-                          ],
-                        )
-                      else
-                        Column(
-                          children: [
-                            TextField(
-                              controller: _searchCtrl,
-                              decoration: InputDecoration(
-                                hintText: 'Buscar por código o nombre...',
-                                filled: true,
-                                fillColor: Palette.fieldBg,
-                                prefixIcon: Icon(
-                                  Icons.search_rounded,
-                                  color: Palette.ink.withValues(alpha: 0.65),
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: Palette.button.withValues(alpha: 0.35),
-                                  ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: Palette.button.withValues(alpha: 0.25),
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: Palette.primary.withValues(alpha: 0.8),
-                                    width: 1.6,
-                                  ),
-                                ),
-                              ),
-                            ),
+
                             const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 46,
-                              child: OutlinedButton.icon(
-                                onPressed: () => _searchCtrl.clear(),
-                                icon: const Icon(Icons.clear_rounded),
-                                label: const Text('Limpiar'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Palette.ink,
-                                  side: BorderSide(
-                                    color: Palette.button.withValues(alpha: 0.55),
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  textStyle: const TextStyle(fontWeight: FontWeight.w900),
-                                ),
+
+                            // ===== filtro dentro del header =====
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: ['Todos', 'PRODUCTO', 'INSUMO'].map((t) {
+                                  final selected = _tipo == t;
+
+                                  return ChoiceChip(
+                                    label: Text(t == 'Todos' ? 'Todos' : t),
+                                    selected: selected,
+                                    selectedColor: Palette.white.withValues(alpha: 0.22),
+                                    backgroundColor: Palette.white.withValues(alpha: 0.14),
+                                    side: BorderSide(
+                                      color: Palette.ink.withValues(alpha: selected ? 0.55 : 0.26),
+                                    ),
+                                    labelStyle: TextStyle(
+                                      color: Palette.ink.withValues(alpha: selected ? 1 : 0.92),
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                    onSelected: (_) => setState(() => _tipo = t),
+                                  );
+                                }).toList(),
                               ),
                             ),
                           ],
                         ),
-
-                      const SizedBox(height: 10),
-
-                      // ================= FILTRO TIPO =================
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: ['Todos', 'PRODUCTO', 'INSUMO'].map((t) {
-                          final selected = _tipo == t;
-                          return ChoiceChip(
-                            label: Text(t == 'Todos' ? 'Todos' : t),
-                            selected: selected,
-                            selectedColor: Palette.button,
-                            backgroundColor: Palette.card,
-                            labelStyle: TextStyle(
-                              color: selected ? Palette.white : Palette.ink,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            onSelected: (_) => setState(() => _tipo = t),
-                          );
-                        }).toList(),
                       ),
-
                       const SizedBox(height: 16),
 
                       // ================= LISTADO =================

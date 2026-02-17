@@ -147,98 +147,178 @@ class _CategoriasPageState extends State<CategoriasPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ================= HEADER =================
-          Row(
-            children: [
-              const Text(
-                'Gestión de Categorías',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: Palette.ink,
-                ),
-              ),
-              const Spacer(),
-              ElevatedButton.icon(
-                onPressed: _openAddDialog,
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Agregar categoría'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Palette.button,
-                  foregroundColor: Palette.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  textStyle: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
-          ),
+          // ================= HEADER (con buscador adentro) =================
+          LayoutBuilder(
+            builder: (context, c) {
+              final compact = c.maxWidth < 720;
+              final ink = Palette.ink;
 
-          const SizedBox(height: 14),
-
-          // ================= BUSCADOR =================
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: controller.searchCtrl,
-                  decoration: InputDecoration(
-                    hintText: 'Buscar por nombre o descripción...',
-                    filled: true,
-                    fillColor: Palette.fieldBg,
-                    prefixIcon: Icon(
-                      Icons.search_rounded,
-                      color: Palette.ink.withValues(alpha: 0.65),
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: Palette.button.withValues(alpha: 0.35),
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: Palette.button.withValues(alpha: 0.25),
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: Palette.primary.withValues(alpha: 0.8),
-                        width: 1.6,
-                      ),
-                    ),
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Palette.primary.withValues(alpha: 0.95),
+                      Palette.secondary.withValues(alpha: 0.90),
+                    ],
                   ),
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                onPressed: () => controller.searchCtrl.clear(),
-                icon: const Icon(Icons.clear_rounded),
-                label: const Text('Limpiar'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Palette.ink,
-                  side: BorderSide(color: Palette.button.withValues(alpha: 0.55)),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
-            ],
-          ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: Palette.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Palette.white.withValues(alpha: 0.35),
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.category_rounded,
+                            color: Palette.white,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Gestión de Categorías',
+                                style: TextStyle(
+                                  fontSize: compact ? 18 : 22,
+                                  fontWeight: FontWeight.w900,
+                                  color: Palette.white,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Crea y administra categorías de productos',
+                                style: TextStyle(
+                                  fontSize: compact ? 12 : 13,
+                                  color: Palette.white.withValues(alpha: 0.92),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton.icon(
+                          onPressed: _openAddDialog,
+                          icon: const Icon(Icons.add_rounded),
+                          label: Text(compact ? 'Agregar' : 'Agregar categoría'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Palette.white.withValues(alpha: 0.18),
+                            foregroundColor: Palette.white,
+                            elevation: 0,
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              side: BorderSide(
+                                color: Palette.white,
+                                width: 2,
+                              ),
+                            ),
+                            textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ],
+                    ),
 
-          const SizedBox(height: 16),
+                    const SizedBox(height: 12),
+
+                    // ===== buscador dentro del header (como Usuarios/Unidades) =====
+                              Container(
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  color: Palette.white,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(color: ink.withValues(alpha: 0.06)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.08),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 12),
+                                    ),
+                                  ],
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.search_rounded,
+                                      color: ink.withValues(alpha: 0.45),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: TextField(
+                                        controller: controller.searchCtrl,
+                                        decoration: InputDecoration(
+                                          hintText: 'Buscar por nombre o descripción…',
+                                          border: InputBorder.none,
+                                          hintStyle: TextStyle(
+                                            color: ink.withValues(alpha: 0.35),
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        style: TextStyle(
+                                          color: ink,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ),
+                                    ValueListenableBuilder<TextEditingValue>(
+                                      valueListenable: controller.searchCtrl,
+                                      builder: (_, v, __) {
+                                        final has = v.text.trim().isNotEmpty;
+                                        return AnimatedSwitcher(
+                                          duration: const Duration(milliseconds: 160),
+                                          transitionBuilder: (c, a) =>
+                                              FadeTransition(opacity: a, child: c),
+                                          child: !has
+                                              ? const SizedBox(width: 10, key: ValueKey('empty'))
+                                              : InkWell(
+                                                  key: const ValueKey('clear'),
+                                                  onTap: () => controller.searchCtrl.clear(),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  child: Padding(
+                                                    padding: const EdgeInsets.all(6),
+                                                    child: Icon(
+                                                      Icons.close_rounded,
+                                                      color: ink.withValues(alpha: 0.55),
+                                                    ),
+                                                  ),
+                                                ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
 
           // ================= LISTADO =================
           Expanded(

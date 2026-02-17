@@ -375,7 +375,7 @@ class _RoleFilterMini extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: .18),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: .18)),
+        border: Border.all(color: Colors.white, width: 2)
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
