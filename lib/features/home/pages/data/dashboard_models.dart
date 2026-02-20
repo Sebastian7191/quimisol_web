@@ -18,7 +18,7 @@ String _normBasic(String s) {
 
 String normalizeEstado(String s) {
   final e = _normBasic(s);
-  if (e == 'en camino' || e == 'en camino ') return 'en camino';
+  if (e == 'en camino') return 'en camino';
   return e;
 }
 
@@ -38,6 +38,68 @@ String canonicalDepartamento(String raw) {
   return map[n] ?? (raw.trim().isEmpty ? '' : raw.trim());
 }
 
+//
+// ------------------------------------------------------
+// MINI MODELOS PARA DETALLE DEL ALMACÉN
+// ------------------------------------------------------
+//
+
+class ProductoDetalleMini {
+  final String id;
+  final String nombre;
+  final int stock;
+  final String unidad;
+  final double precio;
+  final String almacenNombre;
+
+  ProductoDetalleMini({
+    required this.id,
+    required this.nombre,
+    required this.stock,
+    required this.unidad,
+    required this.precio,
+    required this.almacenNombre,
+  });
+}
+
+class RepartidorDetalleMini {
+  final String id;
+  final String nombre;
+  final String email;
+  final String foto;
+  final String almacenId;
+
+  RepartidorDetalleMini({
+    required this.id,
+    required this.nombre,
+    required this.email,
+    required this.foto,
+    required this.almacenId,
+  });
+}
+
+class BannerDetalleMini {
+  final String id;
+  final String titulo;
+  final String subtitulo;
+  final String imagen;
+  final String estado;
+
+  BannerDetalleMini({
+    required this.id,
+    required this.titulo,
+    required this.subtitulo,
+    required this.imagen,
+    required this.estado,
+  });
+}
+
+//
+// ─────────────────────────────────────────────────────────────
+//   MODELO PRINCIPAL
+// ─────────────────────────────────────────────────────────────
+//
+
 class DashboardStats {
   // pedidos
   final int pedidosTotal;
@@ -52,8 +114,8 @@ class DashboardStats {
 
   // productos
   final int productosTotal;
-  final int productosStockBajo; // <=5
-  final int productosStockCero; // <=0
+  final int productosStockBajo;
+  final int productosStockCero;
   final Map<String, int> productosPorTipo;
 
   // usuarios
@@ -67,15 +129,24 @@ class DashboardStats {
   final int bannersActivos;
 
   final List<PedidoMini> pedidosRecientes;
+
+  /// 🔥 NUEVO: lista completa filtrada por rango
+  final List<PedidoMini> pedidosFiltrados;
+
   final List<ProductoMini> productosLowStock;
 
-  // datos para charts
+  // charts
   final Map<DateTime, int> pedidosPorDia;
   final Map<String, int> pedidosPorDepartamento;
   final Map<String, int> pedidosPorEstado;
 
-  // ✅ extra: top productos vendidos (por cantidad)
+  // top productos
   final List<TopProductoVenta> topProductosVendidos;
+
+  // 🟩 DETALLE DEL ALMACÉN
+  final List<ProductoDetalleMini> productosDelAlmacen;
+  final List<RepartidorDetalleMini> repartidoresDelAlmacen;
+  final List<BannerDetalleMini> bannersDelAlmacen;
 
   DashboardStats({
     required this.pedidosTotal,
@@ -95,11 +166,15 @@ class DashboardStats {
     required this.bannersTotal,
     required this.bannersActivos,
     required this.pedidosRecientes,
+    required this.pedidosFiltrados, // 🔥 NUEVO
     required this.productosLowStock,
     required this.pedidosPorDia,
     required this.pedidosPorDepartamento,
     required this.pedidosPorEstado,
     required this.topProductosVendidos,
+    required this.productosDelAlmacen,
+    required this.repartidoresDelAlmacen,
+    required this.bannersDelAlmacen,
   });
 
   static DashboardStats build({
@@ -108,20 +183,24 @@ class DashboardStats {
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> usuarios,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> repartidores,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> banners,
+    required String? almacenId,
     DateTime? rangeStart,
     int recentLimit = 6,
     int topProductsLimit = 8,
   }) {
-    // ===== pedidos =====
+    //
+    // --------------------------------------------------------------------
+    // PROCESAR PEDIDOS
+    // --------------------------------------------------------------------
+    //
     int pend = 0, acept = 0, enc = 0, entr = 0, canc = 0;
-    double ventas = 0, envio = 0;
+    double ventas = 0, costoEnvio = 0;
 
     final recent = <PedidoMini>[];
     final porDia = <DateTime, int>{};
     final porDep = <String, int>{};
     final porEstado = <String, int>{};
 
-    // top products
     final topAgg = <String, _TopAgg>{};
 
     for (final d in pedidos) {
@@ -130,33 +209,28 @@ class DashboardStats {
       final estadoRaw = (m['estado'] ?? '').toString();
       final estado = normalizeEstado(estadoRaw);
 
-      // departamento puede venir en root o en ubicacion.departamento
       final depRaw = (m['departamento'] ??
-              (m['ubicacion'] is Map ? (m['ubicacion']['departamento']) : null) ??
-              '')
+              (m['ubicacion'] is Map ? m['ubicacion']['departamento'] : ''))
           .toString();
       final dep = canonicalDepartamento(depRaw);
+
       if (dep.isNotEmpty) porDep[dep] = (porDep[dep] ?? 0) + 1;
 
-      final estKey = estado.isEmpty ? '—' : estado;
-      porEstado[estKey] = (porEstado[estKey] ?? 0) + 1;
+      porEstado[estado] = (porEstado[estado] ?? 0) + 1;
 
-      DateTime created = DateTime.fromMillisecondsSinceEpoch(0);
+      DateTime created = DateTime.now();
       final raw = m['createdAt'];
       if (raw is Timestamp) created = raw.toDate();
       if (raw is DateTime) created = raw;
 
-      final dayKey = DateTime(created.year, created.month, created.day);
-      if (rangeStart == null ||
-          !dayKey.isBefore(DateTime(rangeStart.year, rangeStart.month, rangeStart.day))) {
-        porDia[dayKey] = (porDia[dayKey] ?? 0) + 1;
-      }
+      final key = DateTime(created.year, created.month, created.day);
+      porDia[key] = (porDia[key] ?? 0) + 1;
 
-      final totalRaw = m['total'];
-      final envioRaw = m['costo_envio'];
+      final total = _numToDouble(m['total']);
+      final envio = _numToDouble(m['costo_envio']);
 
-      ventas += _numToDouble(totalRaw);
-      envio += _numToDouble(envioRaw);
+      ventas += total;
+      costoEnvio += envio;
 
       if (estado == 'pendiente') pend++;
       else if (estado == 'aceptado') acept++;
@@ -164,39 +238,38 @@ class DashboardStats {
       else if (estado == 'entregado') entr++;
       else if (estado == 'cancelado') canc++;
 
-      // direccion puede venir en root o ubicacion.direccion
-      final dir = (m['direccion'] ??
-              (m['ubicacion'] is Map ? (m['ubicacion']['direccion']) : null) ??
-              '')
+      final direccion = (m['direccion'] ??
+              (m['ubicacion'] is Map ? m['ubicacion']['direccion'] : ''))
           .toString();
 
       recent.add(PedidoMini(
         id: d.id,
         codigo: (m['codigo'] ?? '').toString(),
-        direccion: dir,
+        direccion: direccion,
         departamento: dep,
         estado: estadoRaw,
         createdAt: created,
-        total: _numToDouble(totalRaw),
+        total: total,
         repartidorNombre: (m['repartidorNombre'] ?? '').toString(),
       ));
 
-      // agregación top productos vendidos
       final items = m['items'];
       if (items is List) {
         for (final it in items) {
           if (it is! Map) continue;
-          final productId = (it['productId'] ?? it['idProducto'] ?? '').toString();
-          final name = (it['name'] ?? it['nombre'] ?? '').toString();
-          final key = productId.isNotEmpty ? productId : name;
-          if (key.isEmpty) continue;
 
-          final qty = _numToInt(it['qty'] ?? it['cantidad']);
-          final price = _numToDouble(it['price'] ?? it['precio']);
-          final agg = topAgg.putIfAbsent(key, () => _TopAgg(
-                productId: productId,
-                nombre: name.isEmpty ? (productId.isEmpty ? key : productId) : name,
-              ));
+          final productId = (it['productId'] ?? '').toString();
+          final name = (it['name'] ?? '').toString();
+          final keyItem = productId.isNotEmpty ? productId : name;
+
+          if (keyItem.isEmpty) continue;
+
+          final qty = _numToInt(it['qty'] ?? 0);
+          final price = _numToDouble(it['price'] ?? 0);
+
+          final agg =
+              topAgg.putIfAbsent(keyItem, () => _TopAgg(productId: productId, nombre: name));
+
           agg.qty += qty;
           agg.ventas += qty * price;
         }
@@ -204,15 +277,13 @@ class DashboardStats {
     }
 
     recent.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final recentCut = recent.take(recentLimit).toList();
 
-    final topList = topAgg.values.toList()
-      ..sort((a, b) {
-        final c = b.qty.compareTo(a.qty);
-        if (c != 0) return c;
-        return b.ventas.compareTo(a.ventas);
-      });
+    final recentOut = recent.take(recentLimit).toList();
 
+    /// 🔥 lista completa filtrada
+    final filtradosOut = recent;
+
+    final topList = topAgg.values.toList()..sort((a, b) => b.qty.compareTo(a.qty));
     final topOut = topList.take(topProductsLimit).map((a) {
       return TopProductoVenta(
         productId: a.productId,
@@ -222,39 +293,75 @@ class DashboardStats {
       );
     }).toList();
 
-    // ===== productos =====
+    //
+    // --------------------------------------------------------------------
+    // PROCESAR PRODUCTOS
+    // --------------------------------------------------------------------
+    //
     final lowStock = <ProductoMini>[];
-    int stockBajo = 0, stockCero = 0;
     final porTipo = <String, int>{};
 
     for (final d in productos) {
       final m = d.data();
+
       final nombre = (m['nombre'] ?? '').toString();
-      final tipo = (m['tipoItem'] ?? '').toString().trim();
-      porTipo[tipo.isEmpty ? 'Sin tipo' : tipo] =
-          (porTipo[tipo.isEmpty ? 'Sin tipo' : tipo] ?? 0) + 1;
+      final tipo = (m['tipoItem'] ?? 'Sin tipo').toString();
+
+      porTipo[tipo] = (porTipo[tipo] ?? 0) + 1;
 
       final stock = _numToInt(m['stock']);
+
       if (stock <= 5) {
-        stockBajo++;
-        if (stock <= 0) stockCero++;
         lowStock.add(ProductoMini(
           id: d.id,
-          nombre: nombre.isEmpty ? d.id : nombre,
+          nombre: nombre,
           stock: stock,
           almacenNombre: (m['almacenNombre'] ?? '').toString(),
         ));
       }
     }
+
     lowStock.sort((a, b) => a.stock.compareTo(b.stock));
 
-    // ===== banners =====
-    int bannersAct = 0;
-    for (final b in banners) {
-      final m = b.data();
-      final estado = (m['estado'] ?? '').toString().trim().toUpperCase();
-      if (estado == 'ACTIVO') bannersAct++;
-    }
+    //
+    // --------------------------------------------------------------------
+    // DETALLES DEL ALMACÉN
+    // --------------------------------------------------------------------
+    //
+
+    final productosDelAlmacen = productos.map((d) {
+      final m = d.data();
+      return ProductoDetalleMini(
+        id: d.id,
+        nombre: (m['nombre'] ?? '').toString(),
+        stock: _numToInt(m['stock']),
+        unidad: (m['unidadNombre'] ?? '').toString(),
+        precio: _numToDouble(m['precio']),
+        almacenNombre: (m['almacenNombre'] ?? '').toString(),
+      );
+    }).toList();
+
+    final repartidoresDelAlmacen = repartidores.map((d) {
+      final m = d.data();
+      return RepartidorDetalleMini(
+        id: d.id,
+        nombre: (m['name'] ?? '').toString(),
+        email: (m['email'] ?? '').toString(),
+        foto: (m['photo'] ?? '').toString(),
+        almacenId: (m['almacenId'] ?? '').toString(),
+      );
+    }).toList();
+
+    final bannersDelAlmacen = banners.map((d) {
+      final m = d.data();
+      return BannerDetalleMini(
+        id: d.id,
+        titulo: (m['titulo'] ?? '').toString(),
+        subtitulo: (m['subtitulo'] ?? '').toString(),
+        imagen: (m['imagen'] ?? '').toString(),
+        estado: (m['estado'] ?? '').toString(),
+      );
+    }).toList();
 
     return DashboardStats(
       pedidosTotal: pedidos.length,
@@ -264,21 +371,27 @@ class DashboardStats {
       pedidosEntregados: entr,
       pedidosCancelados: canc,
       ventasTotal: ventas,
-      costoEnvioTotal: envio,
+      costoEnvioTotal: costoEnvio,
       productosTotal: productos.length,
-      productosStockBajo: stockBajo,
-      productosStockCero: stockCero,
+      productosStockBajo: lowStock.length,
+      productosStockCero: lowStock.where((p) => p.stock <= 0).length,
       productosPorTipo: porTipo,
       usuariosTotal: usuarios.length,
       repartidoresTotal: repartidores.length,
       bannersTotal: banners.length,
-      bannersActivos: bannersAct,
-      pedidosRecientes: recentCut,
+      bannersActivos: banners
+          .where((b) => (b.data()['estado'] ?? '').toString().toUpperCase() == 'ACTIVO')
+          .length,
+      pedidosRecientes: recentOut,
+      pedidosFiltrados: filtradosOut, // 🔥 NUEVO
       productosLowStock: lowStock.take(8).toList(),
       pedidosPorDia: porDia,
       pedidosPorDepartamento: porDep,
       pedidosPorEstado: porEstado,
       topProductosVendidos: topOut,
+      productosDelAlmacen: productosDelAlmacen,
+      repartidoresDelAlmacen: repartidoresDelAlmacen,
+      bannersDelAlmacen: bannersDelAlmacen,
     );
   }
 
@@ -295,6 +408,12 @@ class DashboardStats {
     return int.tryParse(v.toString()) ?? 0;
   }
 }
+
+//
+// ------------------------------------------------------
+// Mini modelos ya existentes
+// ------------------------------------------------------
+//
 
 class PedidoMini {
   final String id;
@@ -351,6 +470,7 @@ class _TopAgg {
   final String nombre;
   int qty = 0;
   double ventas = 0;
+
   _TopAgg({required this.productId, required this.nombre});
 }
 

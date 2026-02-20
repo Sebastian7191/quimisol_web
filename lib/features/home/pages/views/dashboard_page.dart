@@ -5,10 +5,14 @@ import 'package:quimisol_web/core/theme/palette.dart';
 import '../controllers/dashboard_controller.dart';
 import '../data/dashboard_firestore.dart';
 import '../data/dashboard_models.dart';
+
 import 'widgets/dashboard_header.dart';
 import 'widgets/dashboard_filters.dart';
 import 'widgets/dashboard_stat_cards.dart';
 import 'widgets/dashboard_sections.dart';
+
+// 🔥 Importación del servicio de exportación (Excel / PDF)
+import '../services/export_service.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -43,25 +47,25 @@ class _DashboardPageState extends State<DashboardPage> {
         .replaceAll('ó', 'o')
         .replaceAll('ú', 'u')
         .replaceAll('ü', 'u')
-        .replaceAll('ñ', 'n');
-    v = v.replaceAll('_', ' ');
+        .replaceAll('ñ', 'n')
+        .replaceAll('_', ' ');
     v = v.replaceAll(RegExp(r'\s+'), ' ');
     return v;
   }
 
   String _extractDep(Map<String, dynamic> m) {
     final raw = (m['departamento'] ??
-            ((m['ubicacion'] is Map) ? (m['ubicacion']['departamento']) : null) ??
+            (m['ubicacion'] is Map ? (m['ubicacion']['departamento']) : null) ??
             '')
         .toString();
     return raw;
   }
 
-  String _extractEstado(Map<String, dynamic> m) => (m['estado'] ?? '').toString();
+  String _extractEstado(Map<String, dynamic> m) =>
+      (m['estado'] ?? '').toString();
 
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _filtrarPedidos(
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-  ) {
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
     final depFiltro = c.departamento;
     final estFiltro = c.estado;
 
@@ -103,10 +107,9 @@ class _DashboardPageState extends State<DashboardPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  DashboardHeader(width: w),
-                  const SizedBox(height: 14),
-
-                  // filtros (incluye almacenes desde Firestore)
+                  // ================================
+                  // STREAM ALMACENES
+                  // ================================
                   StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                     stream: repo.almacenesStream(),
                     builder: (context, snapAlm) {
@@ -117,6 +120,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         );
                       }
                       final almacenes = snapAlm.data?.docs ?? const [];
+
                       return DashboardFilters(
                         controller: c,
                         almacenes: almacenes,
@@ -124,27 +128,31 @@ class _DashboardPageState extends State<DashboardPage> {
                     },
                   ),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 18),
 
-                  // Datos principales
+                  // ================================
+                  // STREAM PEDIDOS
+                  // ================================
                   StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                     stream: repo.pedidosStream(from: from),
                     builder: (context, pedidosSnap) {
                       if (pedidosSnap.hasError) {
                         return _ErrorBox(
-                          title: 'Error en pedidos (Firestore)',
+                          title: 'Error cargando pedidos',
                           error: pedidosSnap.error,
-                          hint:
-                              'Si el error menciona "index", crea el índice sugerido en Firebase Console.\n'
-                              'Si menciona "permission-denied", revisa reglas/permisos.',
                         );
                       }
 
                       final pedidosAll = pedidosSnap.data?.docs ?? const [];
                       final pedidosDocs = _filtrarPedidos(pedidosAll);
 
-                      return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                        stream: repo.productosStream(almacenId: c.almacenId),
+                      // ================================
+                      // STREAM PRODUCTOS
+                      // ================================
+                      return StreamBuilder<
+                              QuerySnapshot<Map<String, dynamic>>>(
+                        stream:
+                            repo.productosStream(almacenId: c.almacenId),
                         builder: (context, prodSnap) {
                           if (prodSnap.hasError) {
                             return _ErrorBox(
@@ -152,9 +160,15 @@ class _DashboardPageState extends State<DashboardPage> {
                               error: prodSnap.error,
                             );
                           }
-                          final prodDocs = prodSnap.data?.docs ?? const [];
 
-                          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                          final prodDocs =
+                              prodSnap.data?.docs ?? const [];
+
+                          // ================================
+                          // STREAM USUARIOS
+                          // ================================
+                          return StreamBuilder<
+                                  QuerySnapshot<Map<String, dynamic>>>(
                             stream: repo.usuariosStream(),
                             builder: (context, userSnap) {
                               if (userSnap.hasError) {
@@ -163,52 +177,91 @@ class _DashboardPageState extends State<DashboardPage> {
                                   error: userSnap.error,
                                 );
                               }
-                              final userDocs = userSnap.data?.docs ?? const [];
 
-                              return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                                stream: repo.repartidoresStream(almacenId: c.almacenId),
+                              final userDocs =
+                                  userSnap.data?.docs ?? const [];
+
+                              // ================================
+                              // STREAM REPARTIDORES
+                              // ================================
+                              return StreamBuilder<
+                                      QuerySnapshot<Map<String, dynamic>>>(
+                                stream: repo.repartidoresStream(
+                                    almacenId: c.almacenId),
                                 builder: (context, repSnap) {
                                   if (repSnap.hasError) {
                                     return _ErrorBox(
-                                      title: 'Error cargando repartidores',
+                                      title:
+                                          'Error cargando repartidores',
                                       error: repSnap.error,
                                     );
                                   }
-                                  final repDocs = repSnap.data?.docs ?? const [];
 
-                                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                                  final repDocs =
+                                      repSnap.data?.docs ?? const [];
+
+                                  // ================================
+                                  // STREAM BANNERS
+                                  // ================================
+                                  return StreamBuilder<
+                                          QuerySnapshot<
+                                              Map<String, dynamic>>>(
                                     stream: repo.bannersStream(),
                                     builder: (context, banSnap) {
                                       if (banSnap.hasError) {
                                         return _ErrorBox(
-                                          title: 'Error cargando banners',
+                                          title:
+                                              'Error cargando banners',
                                           error: banSnap.error,
                                         );
                                       }
-                                      final banDocs = banSnap.data?.docs ?? const [];
 
-                                      final stats = DashboardStats.build(
+                                      final banDocs =
+                                          banSnap.data?.docs ??
+                                              const [];
+
+                                      // ================================
+                                      // CREAR MODELO COMPLETO
+                                      // ================================
+                                      final stats =
+                                          DashboardStats.build(
                                         pedidos: pedidosDocs,
                                         productos: prodDocs,
                                         usuarios: userDocs,
                                         repartidores: repDocs,
                                         banners: banDocs,
                                         rangeStart: from,
+                                        almacenId: c.almacenId,
                                       );
 
+                                      // ================================
+                                      // UI FINAL
+                                      // ================================
                                       return Column(
                                         children: [
-                                          DashboardStatCards(width: w, stats: stats),
-                                          const SizedBox(height: 14),
-                                          DashboardSections(width: w, stats: stats, range: c.range),
-                                          const SizedBox(height: 22),
+                                          DashboardHeader(
+                                            width: w,
+                                            onExportExcel: () =>
+                                                ExportService
+                                                    .exportAllExcel(stats),
+                                            onExportPdf: () =>
+                                                ExportService
+                                                    .exportAllPDF(stats),
+                                          ),
 
-                                          if (c.range == DashboardRange.all)
-                                            _InfoBox(
-                                              text:
-                                                  'Nota: "Todo" está limitado a los últimos pedidos por performance.\n'
-                                                  'Si necesitas reportes históricos completos, conviene hacer agregaciones (Cloud Functions / BigQuery).',
-                                            ),
+                                          const SizedBox(height: 14),
+
+                                          DashboardStatCards(
+                                              width: w, stats: stats),
+                                          const SizedBox(height: 14),
+
+                                          DashboardSections(
+                                            width: w,
+                                            stats: stats,
+                                            range: c.range,
+                                          ),
+
+                                          const SizedBox(height: 22),
                                         ],
                                       );
                                     },
@@ -221,16 +274,6 @@ class _DashboardPageState extends State<DashboardPage> {
                       );
                     },
                   ),
-
-                  const SizedBox(height: 22),
-                  Text(
-                    'Tip: si algún gráfico sale vacío, revisa el rango/filtros.',
-                    style: TextStyle(
-                      color: Palette.ink.withValues(alpha: 0.6),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
                 ],
               ),
             );
@@ -241,64 +284,50 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
+// ======================================================
+// COMPONENTES DE ERROR E INFO
+// ======================================================
+
 class _ErrorBox extends StatelessWidget {
+  final String title;
+  final Object? error;
+  final String? hint;
+
   const _ErrorBox({
     required this.title,
     required this.error,
     this.hint,
   });
 
-  final String title;
-  final Object? error;
-  final String? hint;
-
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.06),
+        color: Colors.red.withOpacity(0.05),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.red.withValues(alpha: 0.25)),
+        border: Border.all(color: Colors.red.withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          Text(title,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w900, color: Colors.red)),
           const SizedBox(height: 8),
-          Text((error ?? 'Error desconocido').toString(),
-              style: TextStyle(color: Palette.ink.withValues(alpha: 0.85))),
+          Text(error.toString(),
+              style: TextStyle(
+                color: Palette.ink.withOpacity(0.85),
+              )),
           if (hint != null) ...[
             const SizedBox(height: 10),
-            Text(hint!, style: TextStyle(color: Palette.ink.withValues(alpha: 0.7))),
-          ],
+            Text(
+              hint!,
+              style:
+                  TextStyle(color: Palette.ink.withOpacity(0.7)),
+            ),
+          ]
         ],
-      ),
-    );
-  }
-}
-
-class _InfoBox extends StatelessWidget {
-  const _InfoBox({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Palette.primary.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Palette.primary.withValues(alpha: 0.18)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: Palette.ink.withValues(alpha: 0.78),
-          fontWeight: FontWeight.w700,
-        ),
       ),
     );
   }
